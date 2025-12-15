@@ -2,12 +2,19 @@
 //  HookSocketServer.swift
 //  ClaudeIsland
 //
-//  Unix domain socket server for real-time hook events
+//  Socket server for real-time hook events
+//  Supports Unix domain socket (local) and TCP (remote) connections
 //  Supports request/response for permission decisions
 //
 
 import Foundation
 import os.log
+
+/// Type of connection (for routing authentication)
+enum ConnectionType: Sendable {
+    case unix           // Local Unix socket, no auth needed
+    case tcp(address: String)  // Remote TCP, requires authentication
+}
 
 /// Logger for hook socket server
 private let logger = Logger(subsystem: "com.claudeisland", category: "Hooks")
@@ -103,14 +110,23 @@ typealias HookEventHandler = @Sendable (HookEvent) -> Void
 /// Callback for permission response failures (socket died)
 typealias PermissionFailureHandler = @Sendable (_ sessionId: String, _ toolUseId: String) -> Void
 
-/// Unix domain socket server that receives events from Claude Code hooks
+/// Socket server that receives events from Claude Code hooks
+/// Supports both Unix domain socket (local) and TCP (remote) connections
 /// Uses GCD DispatchSource for non-blocking I/O
 class HookSocketServer {
     static let shared = HookSocketServer()
     static let socketPath = "/tmp/claude-island.sock"
 
+    // MARK: - Unix Socket Properties
     private var serverSocket: Int32 = -1
     private var acceptSource: DispatchSourceRead?
+
+    // MARK: - TCP Socket Properties
+    private var tcpSocket: Int32 = -1
+    private var tcpAcceptSource: DispatchSourceRead?
+    private var expectedToken: String = ""
+
+    // MARK: - Common Properties
     private var eventHandler: HookEventHandler?
     private var permissionFailureHandler: PermissionFailureHandler?
     private let queue = DispatchQueue(label: "com.claudeisland.socket", qos: .userInitiated)
@@ -125,7 +141,27 @@ class HookSocketServer {
     private var toolUseIdCache: [String: [String]] = [:]
     private let cacheLock = NSLock()
 
-    private init() {}
+    /// Observer for configuration changes
+    private var configObserver: NSObjectProtocol?
+
+    private init() {
+        // Listen for TCP configuration changes
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .tcpConfigurationChanged,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.queue.async {
+                self?.updateTCPServer()
+            }
+        }
+    }
+
+    deinit {
+        if let observer = configObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     /// Start the socket server
     func start(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler? = nil) {
@@ -140,6 +176,16 @@ class HookSocketServer {
         eventHandler = onEvent
         permissionFailureHandler = onPermissionFailure
 
+        // Start Unix socket server (always runs for local connections)
+        startUnixSocketServer()
+
+        // Start TCP server if configured
+        updateTCPServer()
+    }
+
+    // MARK: - Unix Socket Server
+
+    private func startUnixSocketServer() {
         unlink(Self.socketPath)
 
         serverSocket = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -187,7 +233,7 @@ class HookSocketServer {
 
         acceptSource = DispatchSource.makeReadSource(fileDescriptor: serverSocket, queue: queue)
         acceptSource?.setEventHandler { [weak self] in
-            self?.acceptConnection()
+            self?.acceptUnixConnection()
         }
         acceptSource?.setCancelHandler { [weak self] in
             if let fd = self?.serverSocket, fd >= 0 {
@@ -198,11 +244,114 @@ class HookSocketServer {
         acceptSource?.resume()
     }
 
+    // MARK: - TCP Socket Server
+
+    /// Update TCP server based on current configuration
+    private func updateTCPServer() {
+        // Get current configuration from main thread
+        Task { @MainActor in
+            let config = NetworkSettings.shared.configuration
+
+            // Switch back to socket queue for server operations
+            self.queue.async { [weak self] in
+                self?.applyTCPConfiguration(config)
+            }
+        }
+    }
+
+    private func applyTCPConfiguration(_ config: TCPConfiguration) {
+        // Stop existing TCP server if running
+        stopTCPServer()
+
+        guard config.bindMode != .disabled else {
+            logger.info("TCP server disabled")
+            return
+        }
+
+        guard let bindAddress = config.bindMode.bindAddress else {
+            return
+        }
+
+        expectedToken = config.authToken
+
+        // Create TCP socket
+        tcpSocket = socket(AF_INET, SOCK_STREAM, 0)
+        guard tcpSocket >= 0 else {
+            logger.error("TCP: Failed to create socket: \(errno)")
+            return
+        }
+
+        // Set socket options
+        var reuseAddr: Int32 = 1
+        setsockopt(tcpSocket, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, socklen_t(MemoryLayout<Int32>.size))
+
+        let flags = fcntl(tcpSocket, F_GETFL)
+        _ = fcntl(tcpSocket, F_SETFL, flags | O_NONBLOCK)
+
+        // Bind to address
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = config.port.bigEndian
+
+        if bindAddress == "0.0.0.0" {
+            addr.sin_addr.s_addr = INADDR_ANY
+        } else {
+            inet_pton(AF_INET, bindAddress, &addr.sin_addr)
+        }
+
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                bind(tcpSocket, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+
+        guard bindResult == 0 else {
+            logger.error("TCP: Failed to bind to \(bindAddress, privacy: .public):\(config.port): errno \(errno)")
+            close(tcpSocket)
+            tcpSocket = -1
+            return
+        }
+
+        guard listen(tcpSocket, 10) == 0 else {
+            logger.error("TCP: Failed to listen: \(errno)")
+            close(tcpSocket)
+            tcpSocket = -1
+            return
+        }
+
+        logger.info("TCP: Listening on \(bindAddress, privacy: .public):\(config.port, privacy: .public)")
+
+        tcpAcceptSource = DispatchSource.makeReadSource(fileDescriptor: tcpSocket, queue: queue)
+        tcpAcceptSource?.setEventHandler { [weak self] in
+            self?.acceptTCPConnection()
+        }
+        tcpAcceptSource?.setCancelHandler { [weak self] in
+            if let fd = self?.tcpSocket, fd >= 0 {
+                close(fd)
+                self?.tcpSocket = -1
+            }
+        }
+        tcpAcceptSource?.resume()
+    }
+
+    private func stopTCPServer() {
+        tcpAcceptSource?.cancel()
+        tcpAcceptSource = nil
+        if tcpSocket >= 0 {
+            close(tcpSocket)
+            tcpSocket = -1
+        }
+    }
+
     /// Stop the socket server
     func stop() {
+        // Stop Unix socket
         acceptSource?.cancel()
         acceptSource = nil
         unlink(Self.socketPath)
+
+        // Stop TCP socket
+        stopTCPServer()
 
         permissionsLock.lock()
         for (_, pending) in pendingPermissions {
@@ -355,19 +504,113 @@ class HookSocketServer {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Connection Handling
 
-    private func acceptConnection() {
+    private func acceptUnixConnection() {
         let clientSocket = accept(serverSocket, nil, nil)
         guard clientSocket >= 0 else { return }
 
         var nosigpipe: Int32 = 1
         setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, socklen_t(MemoryLayout<Int32>.size))
 
-        handleClient(clientSocket)
+        handleClient(clientSocket, connectionType: .unix)
     }
 
-    private func handleClient(_ clientSocket: Int32) {
+    private func acceptTCPConnection() {
+        var clientAddr = sockaddr_in()
+        var addrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+
+        let clientSocket = withUnsafeMutablePointer(to: &clientAddr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                accept(tcpSocket, sockaddrPtr, &addrLen)
+            }
+        }
+
+        guard clientSocket >= 0 else { return }
+
+        var nosigpipe: Int32 = 1
+        setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, socklen_t(MemoryLayout<Int32>.size))
+
+        // Extract client IP for logging
+        var ipBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+        inet_ntop(AF_INET, &clientAddr.sin_addr, &ipBuffer, socklen_t(INET_ADDRSTRLEN))
+        let clientIP = String(cString: ipBuffer)
+
+        logger.debug("TCP: Connection from \(clientIP, privacy: .public)")
+
+        handleClient(clientSocket, connectionType: .tcp(address: clientIP))
+    }
+
+    /// Authenticate TCP client using AUTH protocol
+    private func authenticateTCPClient(_ clientSocket: Int32, address: String) -> Bool {
+        // Read auth line (AUTH <token>\n)
+        var authBuffer = [UInt8](repeating: 0, count: 256)
+        var pollFd = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)
+
+        // 5 second timeout for auth
+        let pollResult = poll(&pollFd, 1, 5000)
+        guard pollResult > 0 else {
+            logger.warning("TCP: Auth timeout from \(address, privacy: .public)")
+            sendTCPError(to: clientSocket, message: "Auth timeout")
+            return false
+        }
+
+        let bytesRead = read(clientSocket, &authBuffer, authBuffer.count)
+        guard bytesRead > 0 else {
+            logger.warning("TCP: No auth data from \(address, privacy: .public)")
+            return false
+        }
+
+        // Parse auth line
+        guard let authString = String(bytes: authBuffer[0..<bytesRead], encoding: .utf8) else {
+            sendTCPError(to: clientSocket, message: "Invalid auth format")
+            return false
+        }
+
+        // Find newline and extract auth part
+        guard let newlineIndex = authString.firstIndex(of: "\n") else {
+            sendTCPError(to: clientSocket, message: "Invalid auth format")
+            return false
+        }
+
+        let authLine = String(authString[..<newlineIndex])
+        let parts = authLine.split(separator: " ", maxSplits: 1)
+
+        guard parts.count == 2,
+              parts[0] == "AUTH",
+              String(parts[1]) == expectedToken else {
+            logger.warning("TCP: Auth failed from \(address, privacy: .public)")
+            sendTCPError(to: clientSocket, message: "Invalid token")
+            return false
+        }
+
+        // Send OK response
+        let okResponse = "OK\n"
+        _ = okResponse.withCString { ptr in
+            write(clientSocket, ptr, strlen(ptr))
+        }
+
+        logger.info("TCP: Authenticated client from \(address, privacy: .public)")
+        return true
+    }
+
+    /// Send error message to TCP client
+    private func sendTCPError(to clientSocket: Int32, message: String) {
+        let errorResponse = "ERR: \(message)\n"
+        _ = errorResponse.withCString { ptr in
+            write(clientSocket, ptr, strlen(ptr))
+        }
+    }
+
+    private func handleClient(_ clientSocket: Int32, connectionType: ConnectionType) {
+        // For TCP connections, authenticate first
+        if case .tcp(let address) = connectionType {
+            guard authenticateTCPClient(clientSocket, address: address) else {
+                close(clientSocket)
+                return
+            }
+        }
+
         let flags = fcntl(clientSocket, F_GETFL)
         _ = fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK)
 
