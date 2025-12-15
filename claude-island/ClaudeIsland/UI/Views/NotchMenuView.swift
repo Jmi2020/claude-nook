@@ -9,13 +9,11 @@ import ApplicationServices
 import Combine
 import SwiftUI
 import ServiceManagement
-import Sparkle
 
 // MARK: - NotchMenuView
 
 struct NotchMenuView: View {
     @ObservedObject var viewModel: NotchViewModel
-    @ObservedObject private var updateManager = UpdateManager.shared
     @ObservedObject private var screenSelector = ScreenSelector.shared
     @ObservedObject private var soundSelector = SoundSelector.shared
     @ObservedObject private var networkSettings = NetworkSettings.shared
@@ -85,13 +83,13 @@ struct NotchMenuView: View {
                 .padding(.vertical, 4)
 
             // About
-            UpdateRow(updateManager: updateManager)
+            GitHubUpdateRow()
 
             MenuRow(
                 icon: "star",
                 label: "Star on GitHub"
             ) {
-                if let url = URL(string: "https://github.com/farouqaldori/claude-island") {
+                if let url = URL(string: "https://github.com/Jmi2020/claude-island-tcp") {
                     NSWorkspace.shared.open(url)
                 }
             }
@@ -128,7 +126,52 @@ struct NotchMenuView: View {
     }
 }
 
-// MARK: - Update Row
+// MARK: - GitHub Update Row
+
+struct GitHubUpdateRow: View {
+    @State private var isHovered = false
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(version) (\(build))"
+    }
+
+    var body: some View {
+        Button {
+            if let url = URL(string: "https://github.com/Jmi2020/claude-island-tcp/releases") {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.7))
+                    .frame(width: 16)
+
+                Text("Check for Updates")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(isHovered ? 1.0 : 0.7))
+
+                Spacer()
+
+                Text(appVersion)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Update Row (Legacy - Sparkle)
 
 struct UpdateRow: View {
     @ObservedObject var updateManager: UpdateManager

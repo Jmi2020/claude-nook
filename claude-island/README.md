@@ -46,6 +46,24 @@ xcodebuild -scheme ClaudeIsland -configuration Release build
 
 The built app will be in `~/Library/Developer/Xcode/DerivedData/ClaudeIsland-*/Build/Products/Release/`
 
+## Updating
+
+This fork uses GitHub for updates (no auto-update). To update:
+
+```bash
+cd claude-island-tcp
+git pull
+cd claude-island
+xcodebuild -scheme ClaudeIsland -configuration Release build
+```
+
+Then restart Claude Island with the newly built app.
+
+**Remote machines** also need to update the hook script:
+```bash
+cp ~/claude-island-tcp/claude-island/ClaudeIsland/Resources/claude-island-state.py ~/.claude/hooks/
+```
+
 ## Quick Start
 
 ### Local Use (Same Machine)

@@ -130,7 +130,7 @@ else
     echo "  /Applications/Claude Island.app/Contents/Resources/claude-island-state.py"
     echo ""
     echo "Or download from GitHub (when available):"
-    echo "  curl -sL 'https://raw.githubusercontent.com/your-repo/claude-island/main/ClaudeIsland/Resources/claude-island-state.py' -o '$HOOK_SCRIPT'"
+    echo "  curl -sL 'https://raw.githubusercontent.com/Jmi2020/claude-island-tcp/main/claude-island/ClaudeIsland/Resources/claude-island-state.py' -o '$HOOK_SCRIPT'"
 fi
 
 echo ""
