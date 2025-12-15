@@ -1,10 +1,10 @@
-# Claude Island - Git Ignore
+# Claude Nook - Git Ignore
 
 # Sensitive files - NEVER commit these
 *.token
-**/claude-island.env
-.config/claude-island/
-**/.claude-island-token
+**/claude-nook.env
+.config/claude-nook/
+**/.claude-nook-token
 
 # macOS system files
 .DS_Store
