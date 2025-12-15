@@ -30,6 +30,12 @@ actor SessionStore {
     /// Sync debounce interval (100ms)
     private let syncDebounceNs: UInt64 = 100_000_000
 
+    /// Stale session cleanup timer
+    private var cleanupTask: Task<Void, Never>?
+
+    /// Cleanup interval (check every 30 seconds)
+    private let cleanupIntervalSeconds: UInt64 = 30
+
     // MARK: - Published State (for UI)
 
     /// Publisher for session state changes (nonisolated for Combine subscription from any context)
@@ -42,7 +48,75 @@ actor SessionStore {
 
     // MARK: - Initialization
 
-    private init() {}
+    private init() {
+        // Start cleanup timer
+        startCleanupTimer()
+
+        // Listen for settings changes
+        Task { @MainActor in
+            NotificationCenter.default.addObserver(
+                forName: .idleTimeoutChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task {
+                    await self?.restartCleanupTimer()
+                }
+            }
+        }
+    }
+
+    // MARK: - Cleanup Timer
+
+    /// Start the cleanup timer for stale sessions
+    private func startCleanupTimer() {
+        cleanupTask?.cancel()
+
+        cleanupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: (self?.cleanupIntervalSeconds ?? 30) * 1_000_000_000)
+                guard !Task.isCancelled else { break }
+                await self?.cleanupStaleSessions()
+            }
+        }
+    }
+
+    /// Restart the cleanup timer (called when settings change)
+    private func restartCleanupTimer() {
+        startCleanupTimer()
+    }
+
+    /// Remove sessions that haven't had activity within the timeout period
+    /// Sessions will automatically reappear if they send a new hook event
+    private func cleanupStaleSessions() {
+        let timeout = AppSettings.idleTimeout
+        guard let timeoutInterval = timeout.timeInterval else {
+            // Cleanup disabled
+            return
+        }
+
+        let cutoffDate = Date().addingTimeInterval(-timeoutInterval)
+        var removedCount = 0
+
+        for (sessionId, session) in sessions {
+            // Don't remove sessions that are actively waiting for user input
+            // (e.g., permission approval) - those should stay visible
+            if session.phase.needsAttention {
+                continue
+            }
+
+            if session.lastActivity < cutoffDate {
+                sessions.removeValue(forKey: sessionId)
+                cancelPendingSync(sessionId: sessionId)
+                removedCount += 1
+                Self.logger.info("Removed stale session \(sessionId.prefix(8), privacy: .public) (idle for >\(Int(timeoutInterval))s)")
+            }
+        }
+
+        if removedCount > 0 {
+            publishState()
+        }
+    }
 
     // MARK: - Event Processing
 

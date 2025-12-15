@@ -16,6 +16,7 @@ struct NotchMenuView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var screenSelector = ScreenSelector.shared
     @ObservedObject private var soundSelector = SoundSelector.shared
+    @ObservedObject private var idleTimeoutSelector = IdleTimeoutSelector.shared
     @ObservedObject private var networkSettings = NetworkSettings.shared
     @State private var hooksInstalled: Bool = false
     @State private var launchAtLogin: Bool = false
@@ -37,6 +38,7 @@ struct NotchMenuView: View {
             // Appearance settings
             ScreenPickerRow(screenSelector: screenSelector)
             SoundPickerRow(soundSelector: soundSelector)
+            IdleTimeoutPickerRow(selector: idleTimeoutSelector)
             NetworkSettingsRow(networkSettings: networkSettings)
 
             Divider()

@@ -31,6 +31,30 @@ enum NotificationSound: String, CaseIterable {
     }
 }
 
+/// Available idle timeout durations for stale session cleanup
+enum IdleTimeout: Int, CaseIterable {
+    case oneMinute = 60
+    case twoMinutes = 120
+    case fiveMinutes = 300
+    case tenMinutes = 600
+    case never = 0
+
+    var displayName: String {
+        switch self {
+        case .oneMinute: return "1 minute"
+        case .twoMinutes: return "2 minutes"
+        case .fiveMinutes: return "5 minutes"
+        case .tenMinutes: return "10 minutes"
+        case .never: return "Never"
+        }
+    }
+
+    /// Time interval in seconds, or nil if disabled
+    var timeInterval: TimeInterval? {
+        self == .never ? nil : TimeInterval(rawValue)
+    }
+}
+
 enum AppSettings {
     private static let defaults = UserDefaults.standard
 
@@ -38,6 +62,7 @@ enum AppSettings {
 
     private enum Keys {
         static let notificationSound = "notificationSound"
+        static let idleTimeout = "idleTimeout"
     }
 
     // MARK: - Notification Sound
@@ -55,4 +80,30 @@ enum AppSettings {
             defaults.set(newValue.rawValue, forKey: Keys.notificationSound)
         }
     }
+
+    // MARK: - Idle Timeout
+
+    /// How long to wait before removing inactive sessions
+    /// Sessions automatically reappear when they show activity again
+    static var idleTimeout: IdleTimeout {
+        get {
+            let rawValue = defaults.integer(forKey: Keys.idleTimeout)
+            // If not set (0) and never explicitly saved, default to 2 minutes
+            if rawValue == 0 && defaults.object(forKey: Keys.idleTimeout) == nil {
+                return .twoMinutes
+            }
+            return IdleTimeout(rawValue: rawValue) ?? .twoMinutes
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: Keys.idleTimeout)
+            // Notify SessionStore of the change
+            NotificationCenter.default.post(name: .idleTimeoutChanged, object: nil)
+        }
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let idleTimeoutChanged = Notification.Name("idleTimeoutChanged")
 }
