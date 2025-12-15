@@ -46,8 +46,8 @@ class NotchPanel: NSPanel {
             .ignoresCycle
         ]
 
-        // Above the menu bar
-        level = .mainMenu + 3
+        // Above everything including menu bar and Finder menus
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)) + 1)
 
         // Enable tooltips even when app is inactive (needed for panel windows)
         allowsToolTipsWhenApplicationIsInactive = true

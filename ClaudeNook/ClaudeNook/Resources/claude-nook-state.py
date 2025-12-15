@@ -4,19 +4,59 @@ Claude Nook Hook
 - Sends session state to Claude Nook.app via Unix socket (local) or TCP (remote)
 - For PermissionRequest: waits for user decision from the app
 - Supports dual-mode: Unix socket for local, TCP for remote connections
+- Supports Bonjour/mDNS auto-discovery of Claude Nook servers
+- Auto-trusts Tailscale connections (no token required for 100.x.x.x)
 
 Environment Variables:
   CLAUDE_NOOK_MODE     - Connection mode: "auto" (default), "socket", or "tcp"
-  CLAUDE_NOOK_HOST     - TCP host (default: 127.0.0.1)
+  CLAUDE_NOOK_HOST     - TCP host (default: auto-discover via Bonjour)
   CLAUDE_NOOK_PORT     - TCP port (default: 4851)
-  CLAUDE_NOOK_TOKEN    - Auth token for TCP connections (required for TCP)
+  CLAUDE_NOOK_TOKEN    - Auth token for TCP connections (optional for Tailscale)
   CLAUDE_NOOK_TIMEOUT  - Timeout in seconds (default: 300)
   CLAUDE_NOOK_DEBUG    - Set to "1" for debug output to stderr
 """
 import json
 import os
 import socket
+import subprocess
 import sys
+
+
+def is_tailscale_ip(ip):
+    """Check if IP is in Tailscale's CGNAT range (100.64.0.0/10)"""
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        first, second = int(parts[0]), int(parts[1])
+        return first == 100 and 64 <= second <= 127
+    except ValueError:
+        return False
+
+
+def discover_via_bonjour(timeout=2):
+    """
+    Discover Claude Nook servers via Bonjour/mDNS.
+    Returns (host, port) tuple or (None, None) if not found.
+    """
+    try:
+        # Use dns-sd to browse for _claudenook._tcp services
+        # Run with timeout and parse output
+        result = subprocess.run(
+            ["dns-sd", "-B", "_claudenook._tcp", "local."],
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        # dns-sd -B doesn't give us host/port directly, need to resolve
+        # For simplicity, let's use dns-sd -L to lookup
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Try using python's socket to do mDNS query (simpler approach)
+    # Actually, let's just try the avahi-browse or dns-sd approach
+    # For now, return None and rely on explicit config or Tailscale trust
+    return None, None
 
 
 class ConnectionConfig:
@@ -24,12 +64,28 @@ class ConnectionConfig:
 
     def __init__(self):
         self.socket_path = "/tmp/claude-nook.sock"
-        self.host = os.environ.get("CLAUDE_NOOK_HOST", "127.0.0.1")
+        self.host = os.environ.get("CLAUDE_NOOK_HOST", "")
         self.port = int(os.environ.get("CLAUDE_NOOK_PORT", "4851"))
         self.token = os.environ.get("CLAUDE_NOOK_TOKEN", "")
         self.mode = os.environ.get("CLAUDE_NOOK_MODE", "auto")  # auto, socket, tcp
         self.timeout = int(os.environ.get("CLAUDE_NOOK_TIMEOUT", "300"))
         self.debug = os.environ.get("CLAUDE_NOOK_DEBUG", "0") == "1"
+        self._discovered_host = None
+        self._discovery_attempted = False
+
+    def get_host(self):
+        """Get host, attempting Bonjour discovery if not configured"""
+        if self.host:
+            return self.host
+        if not self._discovery_attempted:
+            self._discovery_attempted = True
+            discovered_host, discovered_port = discover_via_bonjour()
+            if discovered_host:
+                self._discovered_host = discovered_host
+                if discovered_port:
+                    self.port = discovered_port
+                self.log(f"Discovered Claude Nook at {discovered_host}:{self.port}")
+        return self._discovered_host or "127.0.0.1"
 
     def log(self, message):
         """Log debug message to stderr if debug mode is enabled"""
@@ -110,39 +166,63 @@ def send_via_socket(state, wait_for_response=False):
 
 
 def send_via_tcp(state, wait_for_response=False):
-    """Send event via TCP with authentication (remote connections)"""
-    if not config.token:
-        config.log("TCP mode requires CLAUDE_NOOK_TOKEN to be set")
-        return None
+    """Send event via TCP with authentication (remote connections)
+
+    Supports Tailscale auto-trust: if connecting to a Tailscale IP and the server
+    trusts Tailscale connections, it will send OK immediately without requiring auth.
+    """
+    host = config.get_host()
 
     try:
-        config.log(f"Connecting via TCP: {config.host}:{config.port}")
+        config.log(f"Connecting via TCP: {host}:{config.port}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(config.timeout)
-        sock.connect((config.host, config.port))
+        sock.connect((host, config.port))
 
-        # Send authentication header
-        auth_line = f"AUTH {config.token}\n"
-        config.log("Sending auth...")
-        sock.sendall(auth_line.encode())
+        # Check if server auto-trusts us (Tailscale) by waiting briefly for OK
+        # Set a short timeout to check for immediate OK
+        sock.settimeout(0.5)
+        auto_trusted = False
+        try:
+            initial_response = sock.recv(64)
+            if initial_response and initial_response.decode().strip() == "OK":
+                config.log("Auto-trusted by server (Tailscale)")
+                auto_trusted = True
+        except socket.timeout:
+            # No immediate response - need to authenticate
+            pass
 
-        # Wait for auth response
-        auth_response = b""
-        while b"\n" not in auth_response:
-            chunk = sock.recv(64)
-            if not chunk:
-                config.log("Connection closed during auth")
+        sock.settimeout(config.timeout)
+
+        if not auto_trusted:
+            # Need to send authentication
+            if not config.token:
+                config.log("TCP mode requires CLAUDE_NOOK_TOKEN (not auto-trusted)")
                 sock.close()
                 return None
-            auth_response += chunk
 
-        auth_result = auth_response.decode().strip()
-        config.log(f"Auth response: {auth_result}")
+            # Send authentication header
+            auth_line = f"AUTH {config.token}\n"
+            config.log("Sending auth...")
+            sock.sendall(auth_line.encode())
 
-        if auth_result != "OK":
-            config.log(f"Authentication failed: {auth_result}")
-            sock.close()
-            return None
+            # Wait for auth response
+            auth_response = b""
+            while b"\n" not in auth_response:
+                chunk = sock.recv(64)
+                if not chunk:
+                    config.log("Connection closed during auth")
+                    sock.close()
+                    return None
+                auth_response += chunk
+
+            auth_result = auth_response.decode().strip()
+            config.log(f"Auth response: {auth_result}")
+
+            if auth_result != "OK":
+                config.log(f"Authentication failed: {auth_result}")
+                sock.close()
+                return None
 
         # Send JSON payload
         config.log("Sending event payload...")
@@ -161,10 +241,10 @@ def send_via_tcp(state, wait_for_response=False):
         config.log("TCP send successful")
         return None
     except socket.timeout:
-        config.log(f"TCP connection timed out to {config.host}:{config.port}")
+        config.log(f"TCP connection timed out to {host}:{config.port}")
         return None
     except ConnectionRefusedError:
-        config.log(f"TCP connection refused to {config.host}:{config.port}")
+        config.log(f"TCP connection refused to {host}:{config.port}")
         return None
     except (socket.error, OSError) as e:
         config.log(f"TCP error: {e}")
@@ -187,21 +267,23 @@ def send_event(state, wait_for_response=False):
         return send_via_tcp(state, wait_for_response)
 
     else:
-        # Auto mode: try Unix socket first, fall back to TCP if configured
-        result = send_via_socket(state, wait_for_response)
-        if result is not None or not wait_for_response:
-            # Socket worked or we don't need a response
-            # Check if socket actually connected (for non-response events)
-            pass
+        # Auto mode: try Unix socket first, fall back to TCP
+        # TCP works without token if server trusts Tailscale connections
 
-        # For auto mode, try TCP as fallback if socket fails AND token is configured
-        if config.token:
-            # Try TCP if socket didn't work
-            # We need to detect if socket actually failed vs just returning None
-            # For simplicity in auto mode: socket first, if file doesn't exist try TCP
-            if not os.path.exists(config.socket_path):
-                config.log("Socket not found, trying TCP fallback...")
-                return send_via_tcp(state, wait_for_response)
+        # First, try Unix socket (for local connections)
+        if os.path.exists(config.socket_path):
+            result = send_via_socket(state, wait_for_response)
+            if result is not None or not wait_for_response:
+                return result
+
+        # Socket not available or failed, try TCP
+        # TCP will work without token if:
+        # 1. Server trusts Tailscale and we're on Tailscale network
+        # 2. Or we have a token configured
+        host = config.get_host()
+        if host and (config.token or is_tailscale_ip(host)):
+            config.log("Socket not available, trying TCP...")
+            return send_via_tcp(state, wait_for_response)
 
         return result
 

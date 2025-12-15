@@ -5,9 +5,11 @@
 //  Socket server for real-time hook events
 //  Supports Unix domain socket (local) and TCP (remote) connections
 //  Supports request/response for permission decisions
+//  Supports Bonjour/mDNS for auto-discovery
 //
 
 import Foundation
+import Network
 import os.log
 
 /// Type of connection (for routing authentication)
@@ -125,6 +127,11 @@ class HookSocketServer {
     private var tcpSocket: Int32 = -1
     private var tcpAcceptSource: DispatchSourceRead?
     private var expectedToken: String = ""
+    private var trustTailscale: Bool = true
+
+    // MARK: - Bonjour Properties
+    private var netService: NetService?
+    private var bonjourEnabled: Bool = true
 
     // MARK: - Common Properties
     private var eventHandler: HookEventHandler?
@@ -273,6 +280,8 @@ class HookSocketServer {
         }
 
         expectedToken = config.authToken
+        trustTailscale = config.trustTailscale
+        bonjourEnabled = config.bonjourEnabled
 
         // Create TCP socket
         tcpSocket = socket(AF_INET, SOCK_STREAM, 0)
@@ -332,9 +341,31 @@ class HookSocketServer {
             }
         }
         tcpAcceptSource?.resume()
+
+        // Start Bonjour advertising if enabled
+        if bonjourEnabled {
+            startBonjourService(port: config.port)
+        }
+    }
+
+    // MARK: - Bonjour Service
+
+    private func startBonjourService(port: UInt16) {
+        stopBonjourService()
+
+        // Create NetService for _claudenook._tcp
+        netService = NetService(domain: "", type: "_claudenook._tcp.", name: "", port: Int32(port))
+        netService?.publish()
+        logger.info("Bonjour: Advertising _claudenook._tcp on port \(port)")
+    }
+
+    private func stopBonjourService() {
+        netService?.stop()
+        netService = nil
     }
 
     private func stopTCPServer() {
+        stopBonjourService()
         tcpAcceptSource?.cancel()
         tcpAcceptSource = nil
         if tcpSocket >= 0 {
@@ -542,7 +573,19 @@ class HookSocketServer {
     }
 
     /// Authenticate TCP client using AUTH protocol
+    /// Tailscale IPs (100.64.0.0/10) are auto-trusted if trustTailscale is enabled
     private func authenticateTCPClient(_ clientSocket: Int32, address: String) -> Bool {
+        // Check if this is a trusted Tailscale connection
+        if trustTailscale && TCPConfiguration.isTailscaleIP(address) {
+            logger.info("TCP: Auto-trusting Tailscale connection from \(address, privacy: .public)")
+            // Send OK immediately for trusted connections
+            let okResponse = "OK\n"
+            _ = okResponse.withCString { ptr in
+                write(clientSocket, ptr, strlen(ptr))
+            }
+            return true
+        }
+
         // Read auth line (AUTH <token>\n)
         var authBuffer = [UInt8](repeating: 0, count: 256)
         var pollFd = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)

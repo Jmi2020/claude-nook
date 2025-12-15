@@ -45,6 +45,8 @@ struct TCPConfiguration: Codable, Equatable {
     var bindMode: TCPBindMode = .disabled
     var port: UInt16 = 4851
     var authToken: String = ""
+    var trustTailscale: Bool = true  // Skip auth for Tailscale IPs (100.x.x.x)
+    var bonjourEnabled: Bool = true  // Advertise via Bonjour for auto-discovery
 
     /// Generate a cryptographically secure 64-character hex token
     static func generateToken() -> String {
@@ -56,6 +58,19 @@ struct TCPConfiguration: Codable, Equatable {
                    UUID().uuidString.replacingOccurrences(of: "-", with: "")
         }
         return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Check if an IP address is a Tailscale IP (100.x.x.x CGNAT range)
+    static func isTailscaleIP(_ address: String) -> Bool {
+        // Tailscale uses 100.64.0.0/10 (CGNAT range)
+        // This covers 100.64.0.0 - 100.127.255.255
+        let parts = address.split(separator: ".")
+        guard parts.count == 4,
+              let first = Int(parts[0]),
+              let second = Int(parts[1]) else {
+            return false
+        }
+        return first == 100 && second >= 64 && second <= 127
     }
 }
 
