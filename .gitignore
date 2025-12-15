@@ -1,0 +1,74 @@
+# Claude Island - Git Ignore
+
+# Sensitive files - NEVER commit these
+*.token
+**/claude-island.env
+.config/claude-island/
+**/.claude-island-token
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode build artifacts
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode user-specific files
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Distribution artifacts
+*.dmg
+*.pkg
+*.app.zip
+
+# Sparkle update artifacts (keep appcast.xml if needed)
+*.delta
+
+# CocoaPods (if used)
+Pods/
+Podfile.lock
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# Fastlane (if used)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code signing
+*.mobileprovision
+*.provisionprofile
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files (keep templates)
+.env
+.env.local
+.env.*.local
+!*.template
+!*.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test artifacts
+coverage/
+.nyc_output/
