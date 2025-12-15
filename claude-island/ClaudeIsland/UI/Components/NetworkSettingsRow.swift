@@ -90,6 +90,8 @@ struct NetworkSettingsRow: View {
                 .padding(.leading, 28)
                 .padding(.top, 8)
                 .padding(.bottom, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { } // Consume taps to prevent menu from closing
             }
         }
         .onAppear {
@@ -150,36 +152,41 @@ struct NetworkSettingsRow: View {
 
                 Spacer()
 
-                Button("Copy") {
+                Button {
                     copyToken()
+                } label: {
+                    Text(showTokenCopied ? "Copied!" : "Copy")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(showTokenCopied ? TerminalColors.green : TerminalColors.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(4)
                 }
-                .font(.system(size: 10))
-                .foregroundColor(TerminalColors.blue)
                 .buttonStyle(.plain)
 
-                Button("Regenerate") {
+                Button {
                     _ = networkSettings.regenerateToken()
+                } label: {
+                    Text("Regenerate")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TerminalColors.amber)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(4)
                 }
-                .font(.system(size: 10))
-                .foregroundColor(TerminalColors.amber)
                 .buttonStyle(.plain)
             }
 
             if networkSettings.hasValidToken {
                 Text(networkSettings.maskedToken)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.white.opacity(0.5))
             } else {
                 Text("No token - click Regenerate")
                     .font(.system(size: 10))
                     .foregroundColor(TerminalColors.amber)
-            }
-
-            if showTokenCopied {
-                Text("Copied to clipboard!")
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.green)
-                    .transition(.opacity)
             }
         }
         .padding(.horizontal, 10)
@@ -219,25 +226,27 @@ struct NetworkSettingsRow: View {
 
     @ViewBuilder
     private var copySetupButton: some View {
-        Button {
-            copySetupInfo()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 10))
-                Text("Copy Remote Setup Info")
-                    .font(.system(size: 11))
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                copySetupInfo()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showTokenCopied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 10))
+                    Text(showTokenCopied ? "Copied!" : "Copy Remote Setup Info")
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(showTokenCopied ? TerminalColors.green : TerminalColors.blue)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.04))
+                )
             }
-            .foregroundColor(TerminalColors.blue)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(0.04))
-            )
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, 10)
         .padding(.top, 4)
     }

@@ -97,11 +97,12 @@ class NetworkSettings: ObservableObject {
     /// Extra height needed when picker is expanded
     var expandedPickerHeight: CGFloat {
         guard isPickerExpanded else { return 0 }
-        // Base options (3 modes) + token section if enabled + port section if enabled
+        // Base options (3 modes) + token section if enabled + port section if enabled + copy button
         var height: CGFloat = CGFloat(TCPBindMode.allCases.count) * 50
         if isTCPEnabled {
-            height += 80 // Token section
-            height += 40 // Port section
+            height += 120 // Token section (field + hint text)
+            height += 50  // Port section
+            height += 50  // Copy setup info button
         }
         return height
     }
