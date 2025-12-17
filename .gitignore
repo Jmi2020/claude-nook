@@ -19,10 +19,13 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcodeproj.backup/
 
 # Xcode user-specific files
 *.xcuserstate
 *.xcuserdatad/
+*.xccheckout
+*.xcscmblueprint
 xcuserdata/
 *.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
 
@@ -30,9 +33,11 @@ xcuserdata/
 *.dmg
 *.pkg
 *.app.zip
+releases/
 
 # Sparkle update artifacts (keep appcast.xml if needed)
 *.delta
+.sparkle-keys/
 
 # CocoaPods (if used)
 Pods/
@@ -41,6 +46,8 @@ Podfile.lock
 # Swift Package Manager
 .build/
 Package.resolved
+Packages/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 
 # Fastlane (if used)
 fastlane/report.xml
@@ -54,9 +61,11 @@ fastlane/test_output
 
 # IDE
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
+*.iml
 
 # Environment files (keep templates)
 .env
@@ -72,3 +81,6 @@ npm-debug.log*
 # Test artifacts
 coverage/
 .nyc_output/
+
+# Local docs not meant for git
+CLAUDE.md
