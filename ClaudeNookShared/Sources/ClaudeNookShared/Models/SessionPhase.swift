@@ -1,6 +1,6 @@
 //
 //  SessionPhase.swift
-//  ClaudeNook
+//  ClaudeNookShared
 //
 //  Explicit state machine for Claude session lifecycle.
 //  All state transitions are validated before being applied.
@@ -9,14 +9,21 @@
 import Foundation
 
 /// Permission context for tools waiting for approval
-struct PermissionContext: Sendable {
-    let toolUseId: String
-    let toolName: String
-    let toolInput: [String: AnyCodable]?
-    let receivedAt: Date
+public struct PermissionContext: Sendable, Codable {
+    public let toolUseId: String
+    public let toolName: String
+    public let toolInput: [String: AnyCodable]?
+    public let receivedAt: Date
+
+    public init(toolUseId: String, toolName: String, toolInput: [String: AnyCodable]?, receivedAt: Date) {
+        self.toolUseId = toolUseId
+        self.toolName = toolName
+        self.toolInput = toolInput
+        self.receivedAt = receivedAt
+    }
 
     /// Format tool input for display
-    var formattedInput: String? {
+    public var formattedInput: String? {
         guard let input = toolInput else { return nil }
         var parts: [String] = []
         for (key, value) in input {
@@ -40,7 +47,7 @@ struct PermissionContext: Sendable {
 }
 
 extension PermissionContext: Equatable {
-    nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
+    public nonisolated static func == (lhs: PermissionContext, rhs: PermissionContext) -> Bool {
         // Compare by identity fields only (AnyCodable doesn't conform to Equatable)
         lhs.toolUseId == rhs.toolUseId &&
         lhs.toolName == rhs.toolName &&
@@ -49,7 +56,7 @@ extension PermissionContext: Equatable {
 }
 
 /// Explicit session phases - the state machine
-enum SessionPhase: Sendable {
+public enum SessionPhase: Sendable {
     /// Session is idle, waiting for user input or new activity
     case idle
 
@@ -71,7 +78,7 @@ enum SessionPhase: Sendable {
     // MARK: - State Machine Transitions
 
     /// Check if a transition to the target phase is valid
-    nonisolated func canTransition(to next: SessionPhase) -> Bool {
+    public nonisolated func canTransition(to next: SessionPhase) -> Bool {
         switch (self, next) {
         // Terminal state - no transitions out
         case (.ended, _):
@@ -132,12 +139,12 @@ enum SessionPhase: Sendable {
     }
 
     /// Attempt to transition to a new phase, returns the new phase if valid
-    nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
+    public nonisolated func transition(to next: SessionPhase) -> SessionPhase? {
         canTransition(to: next) ? next : nil
     }
 
     /// Whether this phase indicates the session needs user attention
-    var needsAttention: Bool {
+    public var needsAttention: Bool {
         switch self {
         case .waitingForApproval, .waitingForInput:
             return true
@@ -147,7 +154,7 @@ enum SessionPhase: Sendable {
     }
 
     /// Whether this phase indicates active processing
-    var isActive: Bool {
+    public var isActive: Bool {
         switch self {
         case .processing, .compacting:
             return true
@@ -157,7 +164,7 @@ enum SessionPhase: Sendable {
     }
 
     /// Whether this is a waitingForApproval phase
-    var isWaitingForApproval: Bool {
+    public var isWaitingForApproval: Bool {
         if case .waitingForApproval = self {
             return true
         }
@@ -165,18 +172,36 @@ enum SessionPhase: Sendable {
     }
 
     /// Extract tool name if waiting for approval
-    var approvalToolName: String? {
+    public var approvalToolName: String? {
         if case .waitingForApproval(let ctx) = self {
             return ctx.toolName
         }
         return nil
+    }
+
+    /// String representation of the phase type (for serialization)
+    public var rawValue: String {
+        switch self {
+        case .idle:
+            return "idle"
+        case .processing:
+            return "processing"
+        case .waitingForInput:
+            return "waitingForInput"
+        case .waitingForApproval:
+            return "waitingForApproval"
+        case .compacting:
+            return "compacting"
+        case .ended:
+            return "ended"
+        }
     }
 }
 
 // MARK: - Equatable
 
 extension SessionPhase: Equatable {
-    nonisolated static func == (lhs: SessionPhase, rhs: SessionPhase) -> Bool {
+    public nonisolated static func == (lhs: SessionPhase, rhs: SessionPhase) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle): return true
         case (.processing, .processing): return true
@@ -190,10 +215,32 @@ extension SessionPhase: Equatable {
     }
 }
 
+// MARK: - Hashable
+
+extension SessionPhase: Hashable {
+    public nonisolated func hash(into hasher: inout Hasher) {
+        switch self {
+        case .idle:
+            hasher.combine(0)
+        case .processing:
+            hasher.combine(1)
+        case .waitingForInput:
+            hasher.combine(2)
+        case .waitingForApproval(let ctx):
+            hasher.combine(3)
+            hasher.combine(ctx.toolUseId)
+        case .compacting:
+            hasher.combine(4)
+        case .ended:
+            hasher.combine(5)
+        }
+    }
+}
+
 // MARK: - Debug Description
 
 extension SessionPhase: CustomStringConvertible {
-    nonisolated var description: String {
+    public nonisolated var description: String {
         switch self {
         case .idle:
             return "idle"
@@ -207,6 +254,65 @@ extension SessionPhase: CustomStringConvertible {
             return "compacting"
         case .ended:
             return "ended"
+        }
+    }
+}
+
+// MARK: - Codable Support for SessionPhase
+
+extension SessionPhase: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case context
+    }
+
+    private enum PhaseType: String, Codable {
+        case idle
+        case processing
+        case waitingForInput
+        case waitingForApproval
+        case compacting
+        case ended
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(PhaseType.self, forKey: .type)
+
+        switch type {
+        case .idle:
+            self = .idle
+        case .processing:
+            self = .processing
+        case .waitingForInput:
+            self = .waitingForInput
+        case .waitingForApproval:
+            let context = try container.decode(PermissionContext.self, forKey: .context)
+            self = .waitingForApproval(context)
+        case .compacting:
+            self = .compacting
+        case .ended:
+            self = .ended
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .idle:
+            try container.encode(PhaseType.idle, forKey: .type)
+        case .processing:
+            try container.encode(PhaseType.processing, forKey: .type)
+        case .waitingForInput:
+            try container.encode(PhaseType.waitingForInput, forKey: .type)
+        case .waitingForApproval(let context):
+            try container.encode(PhaseType.waitingForApproval, forKey: .type)
+            try container.encode(context, forKey: .context)
+        case .compacting:
+            try container.encode(PhaseType.compacting, forKey: .type)
+        case .ended:
+            try container.encode(PhaseType.ended, forKey: .type)
         }
     }
 }

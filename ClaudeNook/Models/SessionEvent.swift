@@ -6,6 +6,7 @@
 //  All state changes flow through SessionStore.process(event).
 //
 
+import ClaudeNookShared
 import Foundation
 
 /// All events that can affect session state

@@ -8,6 +8,7 @@
 //  Supports Bonjour/mDNS for auto-discovery
 //
 
+import ClaudeNookShared
 import Foundation
 import Network
 import os.log
@@ -20,82 +21,6 @@ enum ConnectionType: Sendable {
 
 /// Logger for hook socket server
 private let logger = Logger(subsystem: "com.jmi2020.claudenook", category: "Hooks")
-
-/// Event received from Claude Code hooks
-struct HookEvent: Codable, Sendable {
-    let sessionId: String
-    let cwd: String
-    let event: String
-    let status: String
-    let pid: Int?
-    let tty: String?
-    let tool: String?
-    let toolInput: [String: AnyCodable]?
-    let toolUseId: String?
-    let notificationType: String?
-    let message: String?
-
-    enum CodingKeys: String, CodingKey {
-        case sessionId = "session_id"
-        case cwd, event, status, pid, tty, tool
-        case toolInput = "tool_input"
-        case toolUseId = "tool_use_id"
-        case notificationType = "notification_type"
-        case message
-    }
-
-    /// Create a copy with updated toolUseId
-    init(sessionId: String, cwd: String, event: String, status: String, pid: Int?, tty: String?, tool: String?, toolInput: [String: AnyCodable]?, toolUseId: String?, notificationType: String?, message: String?) {
-        self.sessionId = sessionId
-        self.cwd = cwd
-        self.event = event
-        self.status = status
-        self.pid = pid
-        self.tty = tty
-        self.tool = tool
-        self.toolInput = toolInput
-        self.toolUseId = toolUseId
-        self.notificationType = notificationType
-        self.message = message
-    }
-
-    var sessionPhase: SessionPhase {
-        if event == "PreCompact" {
-            return .compacting
-        }
-
-        switch status {
-        case "waiting_for_approval":
-            // Note: Full PermissionContext is constructed by SessionStore, not here
-            // This is just for quick phase checks
-            return .waitingForApproval(PermissionContext(
-                toolUseId: toolUseId ?? "",
-                toolName: tool ?? "unknown",
-                toolInput: toolInput,
-                receivedAt: Date()
-            ))
-        case "waiting_for_input":
-            return .waitingForInput
-        case "running_tool", "processing", "starting":
-            return .processing
-        case "compacting":
-            return .compacting
-        default:
-            return .idle
-        }
-    }
-
-    /// Whether this event expects a response (permission request)
-    nonisolated var expectsResponse: Bool {
-        event == "PermissionRequest" && status == "waiting_for_approval"
-    }
-}
-
-/// Response to send back to the hook
-struct HookResponse: Codable {
-    let decision: String // "allow", "deny", or "ask"
-    let reason: String?
-}
 
 /// Pending permission request waiting for user decision
 struct PendingPermission: Sendable {
@@ -111,6 +36,9 @@ typealias HookEventHandler = @Sendable (HookEvent) -> Void
 
 /// Callback for permission response failures (socket died)
 typealias PermissionFailureHandler = @Sendable (_ sessionId: String, _ toolUseId: String) -> Void
+
+/// Callback to get current session states for iOS subscription
+typealias SessionStateProvider = @Sendable () async -> [SessionState]
 
 /// Socket server that receives events from Claude Code hooks
 /// Supports both Unix domain socket (local) and TCP (remote) connections
@@ -136,6 +64,7 @@ class HookSocketServer {
     // MARK: - Common Properties
     private var eventHandler: HookEventHandler?
     private var permissionFailureHandler: PermissionFailureHandler?
+    private var sessionStateProvider: SessionStateProvider?
     private let queue = DispatchQueue(label: "com.jmi2020.claudenook.socket", qos: .userInitiated)
 
     /// Pending permission requests indexed by toolUseId
@@ -171,23 +100,62 @@ class HookSocketServer {
     }
 
     /// Start the socket server
-    func start(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler? = nil) {
+    func start(
+        onEvent: @escaping HookEventHandler,
+        onPermissionFailure: PermissionFailureHandler? = nil,
+        sessionStateProvider: SessionStateProvider? = nil
+    ) {
         queue.async { [weak self] in
-            self?.startServer(onEvent: onEvent, onPermissionFailure: onPermissionFailure)
+            self?.startServer(onEvent: onEvent, onPermissionFailure: onPermissionFailure, sessionStateProvider: sessionStateProvider)
         }
     }
 
-    private func startServer(onEvent: @escaping HookEventHandler, onPermissionFailure: PermissionFailureHandler?) {
+    private func startServer(
+        onEvent: @escaping HookEventHandler,
+        onPermissionFailure: PermissionFailureHandler?,
+        sessionStateProvider: SessionStateProvider?
+    ) {
         guard serverSocket < 0 else { return }
 
         eventHandler = onEvent
         permissionFailureHandler = onPermissionFailure
+        self.sessionStateProvider = sessionStateProvider
+
+        // Set up iOS connection manager message handler
+        iOSConnectionManager.shared.setMessageHandler { [weak self] clientId, message in
+            self?.handleiOSMessage(clientId: clientId, message: message)
+        }
 
         // Start Unix socket server (always runs for local connections)
         startUnixSocketServer()
 
         // Start TCP server if configured
         updateTCPServer()
+    }
+
+    /// Handle messages from iOS clients
+    private func handleiOSMessage(clientId: UUID, message: iOSClientMessage) {
+        switch message {
+        case .approve(let sessionId, let toolUseId):
+            logger.info("iOS: Approve from \(clientId.uuidString.prefix(8), privacy: .public) for \(sessionId.prefix(8), privacy: .public)")
+            sendPermissionResponse(toolUseId: toolUseId, decision: "allow", reason: nil)
+            // Broadcast resolution to other iOS clients
+            iOSConnectionManager.shared.broadcast(.permissionResolved(sessionId: sessionId, toolUseId: toolUseId))
+
+        case .deny(let sessionId, let toolUseId, let reason):
+            logger.info("iOS: Deny from \(clientId.uuidString.prefix(8), privacy: .public) for \(sessionId.prefix(8), privacy: .public)")
+            sendPermissionResponse(toolUseId: toolUseId, decision: "deny", reason: reason)
+            // Broadcast resolution to other iOS clients
+            iOSConnectionManager.shared.broadcast(.permissionResolved(sessionId: sessionId, toolUseId: toolUseId))
+
+        case .pong:
+            // Heartbeat response, client is alive
+            break
+
+        case .disconnect:
+            // Client disconnected, already handled by iOSConnectionManager
+            break
+        }
     }
 
     // MARK: - Unix Socket Server
@@ -645,9 +613,111 @@ class HookSocketServer {
         }
     }
 
+    // MARK: - iOS Pairing
+
+    /// Handle PAIR command from iOS client
+    /// Format: PAIR <6-digit-code>
+    /// Response: TOKEN <64-char-token> or ERR: <message>
+    private func handlePairCommand(_ clientSocket: Int32, command: String, address: String) {
+        logger.info("PAIR command from \(address, privacy: .public)")
+
+        // Extract the 6-digit code
+        let parts = command.split(separator: " ", maxSplits: 1)
+        guard parts.count == 2 else {
+            sendTCPError(to: clientSocket, message: "Invalid PAIR format")
+            close(clientSocket)
+            return
+        }
+
+        let code = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Validate the pairing code
+        guard let token = PairingCodeManager.shared.validateCode(code) else {
+            sendTCPError(to: clientSocket, message: "Invalid or expired pairing code")
+            close(clientSocket)
+            return
+        }
+
+        // Send the token back
+        let response = "TOKEN \(token)\n"
+        _ = response.withCString { ptr in
+            write(clientSocket, ptr, strlen(ptr))
+        }
+
+        logger.info("PAIR successful from \(address, privacy: .public)")
+        close(clientSocket)
+    }
+
+    // MARK: - iOS SUBSCRIBE Mode
+
+    /// Handle iOS client that sent SUBSCRIBE command
+    private func handleSubscribeClient(_ clientSocket: Int32, address: String) {
+        logger.info("iOS: SUBSCRIBE from \(address, privacy: .public)")
+
+        // Add to iOS connection manager (this keeps the socket open)
+        let clientId = iOSConnectionManager.shared.addClient(socket: clientSocket, address: address)
+
+        // Send initial state snapshot
+        Task {
+            await sendInitialState(to: clientId)
+        }
+    }
+
+    /// Send initial state snapshot to a newly subscribed iOS client
+    private func sendInitialState(to clientId: UUID) async {
+        guard let provider = sessionStateProvider else {
+            logger.warning("iOS: No session state provider - sending empty state")
+            let emptySnapshot = StateSnapshotData(sessions: [])
+            iOSConnectionManager.shared.send(.state(emptySnapshot), to: clientId)
+            return
+        }
+
+        let sessions = await provider()
+        let snapshot = StateSnapshotData(sessions: sessions)
+        iOSConnectionManager.shared.send(.state(snapshot), to: clientId)
+
+        logger.info("iOS: Sent initial state with \(sessions.count) sessions")
+    }
+
+    /// Broadcast a session update to all connected iOS clients
+    func broadcastSessionUpdate(_ session: SessionState) {
+        guard iOSConnectionManager.shared.hasClients else { return }
+
+        let lightSession = SessionStateLightData(from: session)
+        iOSConnectionManager.shared.broadcast(.sessionUpdate(lightSession))
+    }
+
+    /// Broadcast session removed to all connected iOS clients
+    func broadcastSessionRemoved(sessionId: String) {
+        guard iOSConnectionManager.shared.hasClients else { return }
+
+        iOSConnectionManager.shared.broadcast(.sessionRemoved(sessionId: sessionId))
+    }
+
+    /// Broadcast a permission request to all connected iOS clients
+    func broadcastPermissionRequest(sessionId: String, toolUseId: String, toolName: String, toolInput: String?, projectName: String) {
+        guard iOSConnectionManager.shared.hasClients else { return }
+
+        let request = PermissionRequestData(
+            sessionId: sessionId,
+            toolUseId: toolUseId,
+            toolName: toolName,
+            toolInput: toolInput,
+            projectName: projectName
+        )
+        iOSConnectionManager.shared.broadcast(.permissionRequest(request))
+    }
+
+    /// Get count of connected iOS clients
+    var iOSClientCount: Int {
+        iOSConnectionManager.shared.clientCount
+    }
+
     private func handleClient(_ clientSocket: Int32, connectionType: ConnectionType) {
         // For TCP connections, authenticate first
+        var clientAddress = ""
         if case .tcp(let address) = connectionType {
+            clientAddress = address
             guard authenticateTCPClient(clientSocket, address: address) else {
                 close(clientSocket)
                 return
@@ -670,6 +740,28 @@ class HookSocketServer {
 
                 if bytesRead > 0 {
                     allData.append(contentsOf: buffer[0..<bytesRead])
+
+                    // Check for SUBSCRIBE command (iOS client)
+                    if let str = String(data: allData, encoding: .utf8) {
+                        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed == "SUBSCRIBE" {
+                            handleSubscribeClient(clientSocket, address: clientAddress)
+                            return
+                        }
+                        // Check for PAIR command (iOS client pairing with 6-digit code)
+                        if trimmed.hasPrefix("PAIR ") {
+                            handlePairCommand(clientSocket, command: trimmed, address: clientAddress)
+                            return
+                        }
+                    }
+
+                    // Check if data looks like complete JSON (starts with { and ends with })
+                    if allData.first == 0x7B {  // '{'
+                        if let lastNonWhitespace = allData.last(where: { !CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar($0)) }),
+                           lastNonWhitespace == 0x7D {  // '}'
+                            break
+                        }
+                    }
                 } else if bytesRead == 0 {
                     break
                 } else if errno != EAGAIN && errno != EWOULDBLOCK {
@@ -692,6 +784,12 @@ class HookSocketServer {
         let data = allData
 
         guard let event = try? JSONDecoder().decode(HookEvent.self, from: data) else {
+            // Check one more time for SUBSCRIBE in case we missed it
+            if let str = String(data: data, encoding: .utf8),
+               str.trimmingCharacters(in: .whitespacesAndNewlines) == "SUBSCRIBE" {
+                handleSubscribeClient(clientSocket, address: clientAddress)
+                return
+            }
             logger.warning("Failed to parse event: \(String(data: data, encoding: .utf8) ?? "?", privacy: .public)")
             close(clientSocket)
             return
@@ -835,67 +933,6 @@ class HookSocketServer {
 
         if !writeSuccess {
             permissionFailureHandler?(sessionId, pending.toolUseId)
-        }
-    }
-}
-
-// MARK: - AnyCodable for tool_input
-
-/// Type-erasing codable wrapper for heterogeneous values
-/// Used to decode JSON objects with mixed value types
-struct AnyCodable: Codable, @unchecked Sendable {
-    /// The underlying value (nonisolated(unsafe) because Any is not Sendable)
-    nonisolated(unsafe) let value: Any
-
-    /// Initialize with any value
-    init(_ value: Any) {
-        self.value = value
-    }
-
-    /// Decode from JSON
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            value = NSNull()
-        } else if let bool = try? container.decode(Bool.self) {
-            value = bool
-        } else if let int = try? container.decode(Int.self) {
-            value = int
-        } else if let double = try? container.decode(Double.self) {
-            value = double
-        } else if let string = try? container.decode(String.self) {
-            value = string
-        } else if let array = try? container.decode([AnyCodable].self) {
-            value = array.map { $0.value }
-        } else if let dict = try? container.decode([String: AnyCodable].self) {
-            value = dict.mapValues { $0.value }
-        } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode value")
-        }
-    }
-
-    /// Encode to JSON
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-
-        switch value {
-        case is NSNull:
-            try container.encodeNil()
-        case let bool as Bool:
-            try container.encode(bool)
-        case let int as Int:
-            try container.encode(int)
-        case let double as Double:
-            try container.encode(double)
-        case let string as String:
-            try container.encode(string)
-        case let array as [Any]:
-            try container.encode(array.map { AnyCodable($0) })
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable($0) })
-        default:
-            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: [], debugDescription: "Cannot encode value"))
         }
     }
 }

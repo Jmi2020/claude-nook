@@ -5,6 +5,7 @@
 //  Pixel-art status icons for Claude instances
 //
 
+import ClaudeNookShared
 import SwiftUI
 
 // MARK: - Waiting for Input Icon (speech bubble)

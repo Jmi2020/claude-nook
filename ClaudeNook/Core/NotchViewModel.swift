@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import ClaudeNookShared
 import Combine
 import SwiftUI
 

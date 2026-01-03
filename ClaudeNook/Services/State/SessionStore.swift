@@ -6,6 +6,7 @@
 //  Single source of truth - all state mutations flow through process().
 //
 
+import ClaudeNookShared
 import Combine
 import Foundation
 import Mixpanel
@@ -108,6 +109,7 @@ actor SessionStore {
             if session.lastActivity < cutoffDate {
                 sessions.removeValue(forKey: sessionId)
                 cancelPendingSync(sessionId: sessionId)
+                broadcastSessionRemovedToiOS(sessionId)
                 removedCount += 1
                 Self.logger.info("Removed stale session \(sessionId.prefix(8), privacy: .public) (idle for >\(Int(timeoutInterval))s)")
             }
@@ -212,6 +214,7 @@ actor SessionStore {
         if event.status == "ended" {
             sessions.removeValue(forKey: sessionId)
             cancelPendingSync(sessionId: sessionId)
+            broadcastSessionRemovedToiOS(sessionId)
             return
         }
 
@@ -226,6 +229,9 @@ actor SessionStore {
         if event.event == "PermissionRequest", let toolUseId = event.toolUseId {
             Self.logger.debug("Setting tool \(toolUseId.prefix(12), privacy: .public) status to waitingForApproval")
             updateToolStatus(in: &session, toolId: toolUseId, status: .waitingForApproval)
+
+            // Broadcast permission request to iOS clients
+            broadcastPermissionToiOS(session)
         }
 
         processToolTracking(event: event, session: &session)
@@ -918,6 +924,7 @@ actor SessionStore {
     private func processSessionEnd(sessionId: String) async {
         sessions.removeValue(forKey: sessionId)
         cancelPendingSync(sessionId: sessionId)
+        broadcastSessionRemovedToiOS(sessionId)
     }
 
     // MARK: - History Loading
@@ -1039,6 +1046,34 @@ actor SessionStore {
     private func publishState() {
         let sortedSessions = Array(sessions.values).sorted { $0.projectName < $1.projectName }
         sessionsSubject.send(sortedSessions)
+
+        // Broadcast to connected iOS clients
+        broadcastToiOS(sortedSessions)
+    }
+
+    /// Broadcast session updates to connected iOS clients
+    private nonisolated func broadcastToiOS(_ sessions: [SessionState]) {
+        for session in sessions {
+            HookSocketServer.shared.broadcastSessionUpdate(session)
+        }
+    }
+
+    /// Broadcast permission request to iOS clients (called when permission arrives)
+    private nonisolated func broadcastPermissionToiOS(_ session: SessionState) {
+        guard let permission = session.activePermission else { return }
+
+        HookSocketServer.shared.broadcastPermissionRequest(
+            sessionId: session.sessionId,
+            toolUseId: permission.toolUseId,
+            toolName: permission.toolName,
+            toolInput: permission.formattedInput,
+            projectName: session.projectName
+        )
+    }
+
+    /// Broadcast session removal to iOS clients
+    private nonisolated func broadcastSessionRemovedToiOS(_ sessionId: String) {
+        HookSocketServer.shared.broadcastSessionRemoved(sessionId: sessionId)
     }
 
     // MARK: - Queries

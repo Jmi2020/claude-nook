@@ -5,6 +5,7 @@
 //  Individual views for rendering each tool's result with proper formatting
 //
 
+import ClaudeNookShared
 import SwiftUI
 
 // MARK: - Tool Result Content Dispatcher

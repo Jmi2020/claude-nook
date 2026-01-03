@@ -5,6 +5,7 @@
 //  Helper functions for session phase display
 //
 
+import ClaudeNookShared
 import SwiftUI
 
 struct SessionPhaseHelpers {

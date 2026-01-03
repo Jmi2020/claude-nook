@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import ClaudeNookShared
 import Combine
 import Foundation
 
@@ -66,6 +67,9 @@ class ClaudeSessionMonitor: ObservableObject {
                         .permissionSocketFailed(sessionId: sessionId, toolUseId: toolUseId)
                     )
                 }
+            },
+            sessionStateProvider: {
+                await SessionStore.shared.allSessions()
             }
         )
     }

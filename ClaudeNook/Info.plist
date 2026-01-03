@@ -21,5 +21,9 @@
     <!-- Users should update by pulling from GitHub: git pull -->
     <key>SUEnableAutomaticChecks</key>
     <false/>
+
+    <!-- Bluetooth permission for iOS app pairing -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Claude Nook uses Bluetooth to pair with the iOS app for remote session monitoring and permission approvals.</string>
 </dict>
 </plist>

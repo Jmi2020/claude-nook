@@ -5,6 +5,7 @@
 //  Minimal instances list matching Dynamic Island aesthetic
 //
 
+import ClaudeNookShared
 import Combine
 import SwiftUI
 

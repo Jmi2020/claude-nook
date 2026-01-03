@@ -7,12 +7,17 @@
 
 import SwiftUI
 import AppKit
+import CoreImage.CIFilterBuiltins
 
 struct NetworkSettingsRow: View {
     @ObservedObject var networkSettings: NetworkSettings
+    @ObservedObject var pairingManager = PairingCodeManager.shared
+    @ObservedObject var bluetoothService = BluetoothPairingService.shared
     @State private var isHovered = false
     @State private var showTokenCopied = false
     @State private var portText: String = ""
+    @State private var showQRCode = false
+    @State private var showPairingCode = false
 
     private var isExpanded: Bool {
         networkSettings.isPickerExpanded
@@ -85,6 +90,13 @@ struct NetworkSettingsRow: View {
 
                         // Copy setup info button
                         copySetupButton
+
+                        Divider()
+                            .background(Color.white.opacity(0.08))
+                            .padding(.vertical, 4)
+
+                        // iOS Pairing section
+                        iOSPairingSection
                     }
                 }
                 .padding(.leading, 28)
@@ -96,6 +108,9 @@ struct NetworkSettingsRow: View {
         }
         .onAppear {
             portText = String(networkSettings.configuration.port)
+        }
+        .sheet(isPresented: $showQRCode) {
+            QRCodeSheet(networkSettings: networkSettings)
         }
     }
 
@@ -279,6 +294,189 @@ struct NetworkSettingsRow: View {
             }
         }
     }
+
+    // MARK: - iOS Pairing Section
+
+    @ViewBuilder
+    private var iOSPairingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("iOS App Pairing")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+
+            // First row: QR Code and Pairing Code
+            HStack(spacing: 8) {
+                // QR Code button
+                Button {
+                    showQRCode = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "qrcode")
+                            .font(.system(size: 10))
+                        Text("QR Code")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(TerminalColors.blue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                }
+                .buttonStyle(.plain)
+
+                // Pairing Code button
+                Button {
+                    if pairingManager.isCodeActive {
+                        pairingManager.expireCode()
+                    } else {
+                        _ = pairingManager.generateCode()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: pairingManager.isCodeActive ? "xmark" : "number")
+                            .font(.system(size: 10))
+                        Text(pairingManager.isCodeActive ? "Cancel" : "Code")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(pairingManager.isCodeActive ? TerminalColors.amber : TerminalColors.blue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Bluetooth button (full width)
+            Button {
+                if bluetoothService.isAdvertising {
+                    bluetoothService.stopAdvertising()
+                } else {
+                    bluetoothService.startAdvertising()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if case .advertising = bluetoothService.state {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: bluetoothIcon)
+                            .font(.system(size: 10))
+                    }
+                    Text(bluetoothButtonText)
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(bluetoothButtonColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.04))
+                )
+            }
+            .buttonStyle(.plain)
+
+            // Bluetooth status
+            if bluetoothService.state != .idle {
+                BluetoothStatusView(state: bluetoothService.state)
+            }
+
+            // Show pairing code if active
+            if pairingManager.isCodeActive, let code = pairingManager.currentCode {
+                PairingCodeDisplay(code: code, remainingSeconds: pairingManager.remainingSeconds)
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    // MARK: - Bluetooth Helpers
+
+    private var bluetoothIcon: String {
+        switch bluetoothService.state {
+        case .idle:
+            return "antenna.radiowaves.left.and.right"
+        case .poweredOff:
+            return "antenna.radiowaves.left.and.right.slash"
+        case .unauthorized:
+            return "exclamationmark.triangle"
+        case .advertising:
+            return "antenna.radiowaves.left.and.right"
+        case .connected:
+            return "checkmark.circle"
+        case .error:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var bluetoothButtonText: String {
+        switch bluetoothService.state {
+        case .idle:
+            return "Bluetooth Pairing"
+        case .poweredOff:
+            return "Bluetooth Off"
+        case .unauthorized:
+            return "Bluetooth Unauthorized"
+        case .advertising:
+            return "Stop Bluetooth"
+        case .connected:
+            return "Connected via Bluetooth"
+        case .error:
+            return "Bluetooth Error"
+        }
+    }
+
+    private var bluetoothButtonColor: Color {
+        switch bluetoothService.state {
+        case .idle:
+            return TerminalColors.blue
+        case .poweredOff, .unauthorized, .error:
+            return TerminalColors.amber
+        case .advertising:
+            return TerminalColors.amber
+        case .connected:
+            return TerminalColors.green
+        }
+    }
+}
+
+// MARK: - Bluetooth Status View
+
+private struct BluetoothStatusView: View {
+    let state: BluetoothPairingState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+
+            Text(state.description)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.6))
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusColor: Color {
+        switch state {
+        case .idle:
+            return .white.opacity(0.3)
+        case .poweredOff, .unauthorized, .error:
+            return TerminalColors.amber
+        case .advertising:
+            return TerminalColors.blue
+        case .connected:
+            return TerminalColors.green
+        }
+    }
 }
 
 // MARK: - Network Mode Option
@@ -324,5 +522,204 @@ private struct NetworkModeOption: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Pairing Code Display
+
+private struct PairingCodeDisplay: View {
+    let code: String
+    let remainingSeconds: Int
+
+    @State private var timeRemaining: Int
+
+    init(code: String, remainingSeconds: Int) {
+        self.code = code
+        self.remainingSeconds = remainingSeconds
+        self._timeRemaining = State(initialValue: remainingSeconds)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Large code display
+            HStack(spacing: 8) {
+                ForEach(Array(code), id: \.self) { digit in
+                    Text(String(digit))
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 40)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(6)
+                }
+            }
+
+            // Countdown timer
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.system(size: 10))
+                Text("Expires in \(timeRemaining)s")
+                    .font(.system(size: 11))
+            }
+            .foregroundColor(timeRemaining <= 30 ? TerminalColors.amber : .white.opacity(0.5))
+        }
+        .padding(.vertical, 8)
+        .onAppear {
+            startCountdown()
+        }
+    }
+
+    private func startCountdown() {
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+            if timeRemaining > 0 {
+                timeRemaining -= 1
+            } else {
+                timer.invalidate()
+            }
+        }
+    }
+}
+
+// MARK: - QR Code Sheet
+
+struct QRCodeSheet: View {
+    @ObservedObject var networkSettings: NetworkSettings
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack {
+                Text("Scan with Claude Nook iOS")
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // QR Code
+            if let qrImage = generateQRCode() {
+                Image(nsImage: qrImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .background(Color.white)
+                    .cornerRadius(12)
+            } else {
+                VStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 40))
+                        .foregroundColor(TerminalColors.amber)
+                    Text("Could not generate QR code")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .frame(width: 200, height: 200)
+            }
+
+            // Instructions
+            VStack(spacing: 4) {
+                Text("Open Claude Nook on your iPhone")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                Text("Tap \"Scan QR Code\" to connect")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            // Connection info
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Host:")
+                        .foregroundColor(.white.opacity(0.5))
+                    Text(getLocalIP() ?? "Unknown")
+                        .foregroundColor(.white)
+                }
+                HStack {
+                    Text("Port:")
+                        .foregroundColor(.white.opacity(0.5))
+                    Text("\(networkSettings.configuration.port)")
+                        .foregroundColor(.white)
+                }
+            }
+            .font(.system(size: 12, design: .monospaced))
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(8)
+        }
+        .padding(24)
+        .frame(width: 300)
+        .background(Color(red: 0.1, green: 0.1, blue: 0.12))
+    }
+
+    private func generateQRCode() -> NSImage? {
+        guard let host = getLocalIP() else { return nil }
+
+        // Create connection URL
+        let urlString = "claudenook://connect?host=\(host)&port=\(networkSettings.configuration.port)&token=\(networkSettings.currentToken)"
+
+        guard let data = urlString.data(using: .utf8) else { return nil }
+
+        // Generate QR code
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+
+        guard let ciImage = filter.outputImage else { return nil }
+
+        // Scale up the QR code
+        let scale = CGAffineTransform(scaleX: 10, y: 10)
+        let scaledImage = ciImage.transformed(by: scale)
+
+        guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return nil }
+
+        return NSImage(cgImage: cgImage, size: NSSize(width: 200, height: 200))
+    }
+
+    private func getLocalIP() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        var ptr = ifaddr
+        while ptr != nil {
+            defer { ptr = ptr?.pointee.ifa_next }
+
+            guard let interface = ptr?.pointee else { continue }
+
+            let addrFamily = interface.ifa_addr.pointee.sa_family
+            guard addrFamily == UInt8(AF_INET) else { continue }
+
+            let name = String(cString: interface.ifa_name)
+            // Look for en0 (WiFi) or en1 (Ethernet)
+            guard name == "en0" || name == "en1" else { continue }
+
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            getnameinfo(
+                interface.ifa_addr,
+                socklen_t(interface.ifa_addr.pointee.sa_len),
+                &hostname,
+                socklen_t(hostname.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            )
+            address = String(cString: hostname)
+            break
+        }
+
+        return address
     }
 }

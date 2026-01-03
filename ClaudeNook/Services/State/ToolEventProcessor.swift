@@ -6,6 +6,7 @@
 //  Extracted from SessionStore to reduce complexity.
 //
 
+import ClaudeNookShared
 import Foundation
 import os.log
 

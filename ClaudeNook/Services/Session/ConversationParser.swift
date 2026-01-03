@@ -6,17 +6,9 @@
 //  Optimized for incremental parsing - only reads new lines since last sync
 //
 
+import ClaudeNookShared
 import Foundation
 import os.log
-
-struct ConversationInfo: Equatable {
-    let summary: String?
-    let lastMessage: String?
-    let lastMessageRole: String?  // "user", "assistant", or "tool"
-    let lastToolName: String?  // Tool name if lastMessageRole is "tool"
-    let firstUserMessage: String?  // Fallback title when no summary
-    let lastUserMessageDate: Date?  // Timestamp of last user message (for stable sorting)
-}
 
 actor ConversationParser {
     static let shared = ConversationParser()
@@ -961,15 +953,6 @@ actor ConversationParser {
 
         return tools
     }
-}
-
-/// Info about a subagent tool call parsed from JSONL
-struct SubagentToolInfo: Sendable {
-    let id: String
-    let name: String
-    let input: [String: String]
-    let isCompleted: Bool
-    let timestamp: String?
 }
 
 // MARK: - Static Subagent Tools Parsing

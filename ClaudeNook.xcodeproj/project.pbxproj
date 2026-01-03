@@ -10,10 +10,13 @@
 		FD0F42E72EE7ABA400980302 /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = FD0F42E62EE7ABA400980302 /* Mixpanel */; };
 		FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = FD33FD722EDF32D7002A6548 /* Markdown */; };
 		FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FDA49F7F2EE11E3C00F9612E /* Sparkle */; };
+		FDAB12342EF12345000SHARED /* ClaudeNookShared in Frameworks */ = {isa = PBXBuildFile; productRef = FDAB12352EF12345000SHARED /* ClaudeNookShared */; };
+		FDIOS00012EF123450000IOS /* ClaudeNookShared in Frameworks */ = {isa = PBXBuildFile; productRef = FDIOS00022EF123450000IOS /* ClaudeNookShared */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		FD33FD5D2EDF32D7002A6548 /* Claude Nook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Nook.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDIOS00032EF123450000IOS /* Claude Nook iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Nook iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -35,6 +38,11 @@
 			path = ClaudeNook;
 			sourceTree = "<group>";
 		};
+		FDIOS00042EF123450000IOS /* ClaudeNookiOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ClaudeNookiOS;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,9 +50,18 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FDAB12342EF12345000SHARED /* ClaudeNookShared in Frameworks */,
 				FD0F42E72EE7ABA400980302 /* Mixpanel in Frameworks */,
 				FDA49F7D2EE11E3C00F9612E /* Markdown in Frameworks */,
 				FDA49F7E2EE11E3C00F9612E /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FDIOS00052EF123450000IOS /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDIOS00012EF123450000IOS /* ClaudeNookShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				FD33FD5F2EDF32D7002A6548 /* ClaudeNook */,
+				FDIOS00042EF123450000IOS /* ClaudeNookiOS */,
 				FD33FD5E2EDF32D7002A6548 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -63,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				FD33FD5D2EDF32D7002A6548 /* Claude Nook.app */,
+				FDIOS00032EF123450000IOS /* Claude Nook iOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,12 +106,36 @@
 			);
 			name = ClaudeNook;
 			packageProductDependencies = (
+				FDAB12352EF12345000SHARED /* ClaudeNookShared */,
 				FD33FD722EDF32D7002A6548 /* Markdown */,
 				FDA49F7F2EE11E3C00F9612E /* Sparkle */,
 				FD0F42E62EE7ABA400980302 /* Mixpanel */,
 			);
 			productName = ClaudeNook;
 			productReference = FD33FD5D2EDF32D7002A6548 /* Claude Nook.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FDIOS00062EF123450000IOS /* ClaudeNookiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FDIOS00072EF123450000IOS /* Build configuration list for PBXNativeTarget "ClaudeNookiOS" */;
+			buildPhases = (
+				FDIOS00082EF123450000IOS /* Sources */,
+				FDIOS00052EF123450000IOS /* Frameworks */,
+				FDIOS00092EF123450000IOS /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FDIOS00042EF123450000IOS /* ClaudeNookiOS */,
+			);
+			name = ClaudeNookiOS;
+			packageProductDependencies = (
+				FDIOS00022EF123450000IOS /* ClaudeNookShared */,
+			);
+			productName = ClaudeNookiOS;
+			productReference = FDIOS00032EF123450000IOS /* Claude Nook iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -108,6 +151,9 @@
 					FD33FD5C2EDF32D7002A6548 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
+					FDIOS00062EF123450000IOS = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
 				};
 			};
 			buildConfigurationList = FD33FD582EDF32D7002A6548 /* Build configuration list for PBXProject "ClaudeNook" */;
@@ -120,6 +166,7 @@
 			mainGroup = FD33FD542EDF32D7002A6548;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				FDAB12362EF12345000SHARED /* XCLocalSwiftPackageReference "ClaudeNookShared" */,
 				FD33FD712EDF32D7002A6548 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 				FDA49F802EE11E3C00F9612E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				FD0F42E52EE7ABA400980302 /* XCRemoteSwiftPackageReference "mixpanel-swift" */,
@@ -130,6 +177,7 @@
 			projectRoot = "";
 			targets = (
 				FD33FD5C2EDF32D7002A6548 /* ClaudeNook */,
+				FDIOS00062EF123450000IOS /* ClaudeNookiOS */,
 			);
 		};
 /* End PBXProject section */
@@ -142,10 +190,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FDIOS00092EF123450000IOS /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		FD33FD592EDF32D7002A6548 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FDIOS00082EF123450000IOS /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -284,7 +346,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 2DKS5U9LV4;
+				DEVELOPMENT_TEAM = HK6CB8L97H;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -319,7 +381,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 3;
-				DEVELOPMENT_TEAM = 2DKS5U9LV4;
+				DEVELOPMENT_TEAM = HK6CB8L97H;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -345,6 +407,84 @@
 			};
 			name = Release;
 		};
+		FDIOS000A2EF123450000IOS /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HK6CB8L97H;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Claude Nook";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Claude Nook uses Bluetooth to automatically discover and pair with your Mac for session monitoring.";
+				INFOPLIST_KEY_NSBonjourServices = _claudenook._tcp;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Claude Nook needs camera access to scan QR codes for quick pairing with your Mac.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Claude Nook needs to discover your Mac running Claude Nook on the local network.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jmi2020.claudenook-ios";
+				PRODUCT_NAME = "Claude Nook iOS";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FDIOS000B2EF123450000IOS /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HK6CB8L97H;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Claude Nook";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Claude Nook uses Bluetooth to automatically discover and pair with your Mac for session monitoring.";
+				INFOPLIST_KEY_NSBonjourServices = _claudenook._tcp;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Claude Nook needs camera access to scan QR codes for quick pairing with your Mac.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Claude Nook needs to discover your Mac running Claude Nook on the local network.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.jmi2020.claudenook-ios";
+				PRODUCT_NAME = "Claude Nook iOS";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -366,7 +506,23 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		FDIOS00072EF123450000IOS /* Build configuration list for PBXNativeTarget "ClaudeNookiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDIOS000A2EF123450000IOS /* Debug */,
+				FDIOS000B2EF123450000IOS /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		FDAB12362EF12345000SHARED /* XCLocalSwiftPackageReference "ClaudeNookShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ClaudeNookShared;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		FD0F42E52EE7ABA400980302 /* XCRemoteSwiftPackageReference "mixpanel-swift" */ = {
@@ -410,6 +566,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FDA49F802EE11E3C00F9612E /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		FDAB12352EF12345000SHARED /* ClaudeNookShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ClaudeNookShared;
+		};
+		FDIOS00022EF123450000IOS /* ClaudeNookShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ClaudeNookShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,13 +1,14 @@
 # Claude Nook - Implementation Guide
 
-This guide walks you through setting up Claude Nook with TCP support for remote Claude Code sessions.
+This guide walks you through setting up Claude Nook with TCP support for remote Claude Code sessions, including the iOS companion app.
 
 ## Overview
 
-This fork adds TCP socket support to Claude Nook, allowing you to:
+This fork adds TCP socket support and an iOS companion app to Claude Nook, allowing you to:
 - Run Claude Code on a remote machine (server, VM, container)
 - See the Claude Nook notch UI on your local Mac
-- Approve/deny permissions from your Mac for remote sessions
+- Approve/deny permissions from your Mac or iPhone for remote sessions
+- Monitor multiple Claude sessions from your iOS device
 
 ## Prerequisites
 
@@ -22,6 +23,10 @@ This fork adds TCP socket support to Claude Nook, allowing you to:
 - Git (to clone the repo)
 - Network access to your Mac (SSH, Tailscale, or local network)
 
+### For iOS Companion App
+- iOS 16.0+
+- iPhone on the same network as your Mac (or via Tailscale)
+
 ---
 
 ## Part 1: Setup on Your Mac
@@ -31,10 +36,10 @@ This fork adds TCP socket support to Claude Nook, allowing you to:
 ```bash
 # Clone the TCP-enabled fork
 git clone https://github.com/Jmi2020/claude-nook.git
-cd claude-nook/ClaudeNook
+cd claude-nook
 ```
 
-### Step 1.2: Build the App
+### Step 1.2: Build the macOS App
 
 **Option A: Using Xcode GUI**
 
@@ -60,10 +65,29 @@ cd claude-nook/ClaudeNook
 xcodebuild -scheme ClaudeNook -configuration Debug build
 
 # The app will be in:
-# ~/Library/Developer/Xcode/DerivedData/ClaudeNook-*/Build/Products/Debug/Claude Island.app
+# ~/Library/Developer/Xcode/DerivedData/ClaudeNook-*/Build/Products/Debug/Claude Nook.app
 ```
 
-### Step 1.3: Run the App
+### Step 1.3: Build the iOS App
+
+**Using Xcode GUI (Recommended)**
+
+1. In Xcode with `ClaudeNook.xcodeproj` open:
+   - Select the `ClaudeNookiOS` scheme
+   - Select an iOS Simulator or your connected iPhone
+   - Press `Cmd+R` to build and run
+
+**Using Command Line**
+
+```bash
+# Build for iOS Simulator
+xcodebuild -scheme "ClaudeNookiOS" -destination "platform=iOS Simulator,name=iPhone 16" -configuration Debug build
+
+# The app will be in:
+# ~/Library/Developer/Xcode/DerivedData/ClaudeNook-*/Build/Products/Debug-iphonesimulator/Claude Nook iOS.app
+```
+
+### Step 1.4: Run the macOS App
 
 If you built via command line, locate and run the app:
 
@@ -77,7 +101,7 @@ open ~/Library/Developer/Xcode/DerivedData/ClaudeNook-*/Build/Products/Debug/Cla
 
 Or simply run from Xcode with `Cmd+R`.
 
-### Step 1.4: Configure TCP Settings
+### Step 1.5: Configure TCP Settings
 
 1. **Click on the Claude Nook notch** at the top of your screen
 
@@ -87,7 +111,7 @@ Or simply run from Xcode with `Cmd+R`.
 
 4. **Select your bind mode:**
    - **Localhost Only** - Use this if you'll connect via SSH tunnel (most secure)
-   - **All Interfaces** - Use this for Tailscale or direct LAN connections
+   - **All Interfaces** - Use this for Tailscale, iOS app, or direct LAN connections
 
 5. **Note the configuration:**
    - The port (default: 4851)
@@ -96,7 +120,7 @@ Or simply run from Xcode with `Cmd+R`.
 
 6. **Click "Copy Remote Setup Info"** to get all settings at once
 
-### Step 1.5: Note Your Mac's Address
+### Step 1.6: Note Your Mac's Address
 
 Depending on your connection method:
 
@@ -110,17 +134,55 @@ tailscale status
 
 ---
 
-## Part 2: Setup on Your Remote Machine
+## Part 2: Setup the iOS Companion App
 
-### Step 2.1: Clone the Repository
+### Step 2.1: Launch the iOS App
+
+Run the iOS app on your iPhone or Simulator from Xcode.
+
+### Step 2.2: Connect to Your Mac
+
+1. **On first launch**, the app shows the Connection view
+
+2. **If your Mac is on the same network**, it should appear in the "Discovered Macs" list via Bonjour/mDNS
+
+3. **Tap your Mac** to select it, or manually enter:
+   - Host: Your Mac's IP or hostname
+   - Port: 4851 (default)
+   - Token: Paste the 64-character token from Claude Nook
+
+4. **Tap "Connect"**
+
+### Step 2.3: Using the iOS App
+
+Once connected, you'll see:
+
+- **Session List** - Grid of active Claude Code sessions
+- **Status Indicators** - Processing (blue), Waiting (green), Needs Approval (orange)
+- **Permission Requests** - Sheet appears when a tool needs approval
+
+**To approve a permission:**
+1. A sheet automatically appears when a tool needs approval
+2. Review the tool name and input
+3. Tap "Approve" or "Deny"
+
+**To view session details:**
+- Tap any session card to see details
+- View project name, session ID, and current status
+
+---
+
+## Part 3: Setup on Your Remote Machine
+
+### Step 3.1: Clone the Repository
 
 ```bash
 # Clone to get the updated hook script and setup tools
 git clone https://github.com/Jmi2020/claude-nook.git
-cd claude-nook/ClaudeNook
+cd claude-nook
 ```
 
-### Step 2.2: Install the Hook Script
+### Step 3.2: Install the Hook Script
 
 ```bash
 # Create hooks directory if it doesn't exist
@@ -133,7 +195,7 @@ cp ClaudeNook/Resources/claude-nook-state.py ~/.claude/hooks/
 chmod +x ~/.claude/hooks/claude-nook-state.py
 ```
 
-### Step 2.3: Configure the Connection
+### Step 3.3: Configure the Connection
 
 **Option A: Interactive Setup (Recommended)**
 
@@ -145,7 +207,7 @@ chmod +x ~/.claude/hooks/claude-nook-state.py
 This will prompt you for:
 - Your Mac's hostname/IP
 - The port (default: 4851)
-- The auth token from Claude Island
+- The auth token from Claude Nook
 
 **Option B: Manual Setup**
 
@@ -167,7 +229,7 @@ EOF
 chmod 600 ~/.config/claude-nook/claude-nook.env
 ```
 
-### Step 2.4: Add Shell Integration
+### Step 3.4: Add Shell Integration
 
 Add to your `~/.zshrc` or `~/.bashrc`:
 
@@ -185,7 +247,7 @@ Then reload:
 source ~/.zshrc  # or ~/.bashrc
 ```
 
-### Step 2.5: Verify Hook Registration
+### Step 3.5: Verify Hook Registration
 
 Check that Claude Code knows about the hook:
 
@@ -197,7 +259,7 @@ If the hook isn't registered, you may need to run Claude Nook on your Mac first 
 
 ---
 
-## Part 3: Establish the Connection
+## Part 4: Establish the Connection
 
 ### Option A: SSH Tunnel (Most Secure)
 
@@ -239,9 +301,9 @@ Best for: Both machines on the same trusted network.
 
 ---
 
-## Part 4: Test the Connection
+## Part 5: Test the Connection
 
-### Step 4.1: Run the Test Script
+### Step 5.1: Run the Test Script
 
 On your remote machine:
 
@@ -273,7 +335,7 @@ Configuration:
 === All Tests Passed ===
 ```
 
-### Step 4.2: Test with Claude Code
+### Step 5.2: Test with Claude Code
 
 On your remote machine:
 
@@ -295,6 +357,8 @@ In the debug output, you should see:
 ```
 
 On your Mac, the Claude Nook notch should light up showing the session!
+
+On your iPhone, the session should appear in the Session List!
 
 ---
 
@@ -337,6 +401,13 @@ echo $CLAUDE_NOOK_MODE  # Should output: tcp
    ```bash
    echo '{"session_id":"test","hook_event_name":"SessionStart","cwd":"/tmp"}' | python3 ~/.claude/hooks/claude-nook-state.py
    ```
+
+### iOS App Won't Connect
+
+1. Ensure Mac and iPhone are on the same network
+2. Verify "All Interfaces" mode is enabled in Claude Nook
+3. Check the token is correct (64 characters)
+4. Try the Mac's IP address instead of hostname
 
 ### Debug mode
 
@@ -388,52 +459,82 @@ env | grep CLAUDE_NOOK
 ## Architecture Diagram
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                     YOUR MAC (Local)                           │
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              Claude Nook.app                             │  │
-│  │                                                          │  │
-│  │  ┌─────────────────┐    ┌─────────────────────────────┐  │  │
-│  │  │ Unix Socket     │    │ TCP Socket                  │  │  │
-│  │  │ /tmp/claude-    │    │ 0.0.0.0:4851               │  │  │
-│  │  │ nook.sock       │    │ (or 127.0.0.1:4851)        │  │  │
-│  │  │                 │    │                             │  │  │
-│  │  │ Local Claude    │    │ ◄── Remote connections     │  │  │
-│  │  │ Code sessions   │    │     (authenticated)        │  │  │
-│  │  └─────────────────┘    └─────────────────────────────┘  │  │
-│  │                              │                           │  │
-│  │                              ▼                           │  │
-│  │                    ┌─────────────────┐                   │  │
-│  │                    │   Notch UI      │                   │  │
-│  │                    │   (SwiftUI)     │                   │  │
-│  │                    └─────────────────┘                   │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                              ▲                                 │
-└──────────────────────────────│─────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                          YOUR MAC (Local)                               │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Claude Nook.app                               │  │
+│  │                                                                  │  │
+│  │  ┌─────────────────┐    ┌─────────────────────────────────────┐  │  │
+│  │  │ Unix Socket     │    │ TCP Socket                          │  │  │
+│  │  │ /tmp/claude-    │    │ 0.0.0.0:4851                        │  │  │
+│  │  │ nook.sock       │    │ (or 127.0.0.1:4851)                 │  │  │
+│  │  │                 │    │                                     │  │  │
+│  │  │ Local Claude    │    │ ◄── Remote connections              │  │  │
+│  │  │ Code sessions   │    │     (authenticated)                 │  │  │
+│  │  └─────────────────┘    │                                     │  │  │
+│  │                         │ ◄── iOS app connections             │  │  │
+│  │                         │     (SUBSCRIBE mode)                │  │  │
+│  │                         └─────────────────────────────────────┘  │  │
+│  │                              │                                   │  │
+│  │                              ▼                                   │  │
+│  │                    ┌─────────────────┐                           │  │
+│  │                    │   Notch UI      │                           │  │
+│  │                    │   (SwiftUI)     │                           │  │
+│  │                    └─────────────────┘                           │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                              ▲                                         │
+└──────────────────────────────│─────────────────────────────────────────┘
                                │
-                   TCP Connection (port 4851)
-                   AUTH token\n + JSON payload
-                               │
-┌──────────────────────────────│─────────────────────────────────┐
-│                     REMOTE MACHINE                             │
-│                              │                                 │
-│  ┌───────────────────────────▼──────────────────────────────┐  │
-│  │              Claude Code CLI                             │  │
-│  │                     │                                    │  │
-│  │                     ▼                                    │  │
-│  │  ┌─────────────────────────────────────────────────────┐ │  │
-│  │  │         claude-nook-state.py (hook)                 │ │  │
-│  │  │                                                     │ │  │
-│  │  │  ENV: CLAUDE_NOOK_HOST=mac-ip                      │ │  │
-│  │  │       CLAUDE_NOOK_PORT=4851                        │ │  │
-│  │  │       CLAUDE_NOOK_TOKEN=xxxxx                      │ │  │
-│  │  │       CLAUDE_NOOK_MODE=tcp                         │ │  │
-│  │  └─────────────────────────────────────────────────────┘ │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+            ┌──────────────────┼──────────────────┐
+            │                  │                  │
+   TCP Connection      TCP Connection      TCP Connection
+   AUTH + JSON         SUBSCRIBE mode      AUTH + JSON
+            │                  │                  │
+┌───────────▼──────┐ ┌────────▼────────┐ ┌───────▼──────────┐
+│  REMOTE MACHINE  │ │    iOS APP      │ │  REMOTE MACHINE  │
+│                  │ │                  │ │                  │
+│  Claude Code CLI │ │  Session List   │ │  Claude Code CLI │
+│        │         │ │  Permission     │ │        │         │
+│        ▼         │ │  Approval UI    │ │        ▼         │
+│  claude-nook-    │ │                  │ │  claude-nook-    │
+│  state.py (hook) │ │  Approve/Deny   │ │  state.py (hook) │
+│                  │ │  from iPhone    │ │                  │
+└──────────────────┘ └─────────────────┘ └──────────────────┘
 ```
+
+---
+
+## iOS App Protocol
+
+The iOS app uses a persistent SUBSCRIBE connection to receive real-time updates.
+
+### Connection Flow
+
+1. iOS sends: `AUTH <token>\n`
+2. Server responds: `OK\n`
+3. iOS sends: `SUBSCRIBE\n`
+4. Server responds: `OK\n`
+5. Server pushes: JSON messages (state, updates, permission requests)
+
+### Message Types (Server → iOS)
+
+| Message | Description |
+|---------|-------------|
+| `state` | Full session snapshot on connect |
+| `sessionUpdate` | Session phase/activity change |
+| `permissionRequest` | Tool waiting for approval |
+| `permissionResolved` | Tool was approved/denied |
+| `sessionRemoved` | Session ended |
+| `ping` | Heartbeat (every 30s) |
+
+### Message Types (iOS → Server)
+
+| Message | Description |
+|---------|-------------|
+| `approve` | Allow tool execution |
+| `deny` | Reject tool with optional reason |
+| `pong` | Heartbeat response |
 
 ---
 
@@ -445,3 +546,4 @@ The changes are designed to be:
 - Backwards compatible (Unix socket still works for local)
 - Secure by default (TCP disabled until explicitly enabled)
 - Easy to configure (environment variables, setup scripts)
+- Cross-platform (macOS + iOS support)

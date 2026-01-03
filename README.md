@@ -2,7 +2,7 @@
   <img src="ClaudeNook/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" alt="Logo" width="100" height="100">
   <h3 align="center">Claude Nook</h3>
   <p align="center">
-    A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions — now with remote TCP support.
+    A macOS menu bar app that brings Dynamic Island-style notifications to Claude Code CLI sessions — now with remote TCP support and an iOS companion app.
     <br />
     <br />
     <em>Fork of <a href="https://github.com/farouqaldori/claude-island">farouqaldori/claude-island</a> with TCP socket support for remote sessions.</em>
@@ -11,40 +11,77 @@
 
 ## What's New in This Fork
 
-This fork adds **TCP socket support** for remote Claude Code sessions:
+This fork adds **TCP socket support** for remote Claude Code sessions and an **iOS companion app**:
 
 - **Remote Notifications** — Get Claude Nook notifications on your Mac while running Claude Code on remote servers, VMs, or containers
+- **iOS Companion App** — Monitor sessions and approve permissions from your iPhone
 - **Dual-Mode Operation** — Unix socket (local) + TCP (remote) run simultaneously
 - **Token Authentication** — Secure 64-character hex token for remote connections
+- **Bonjour Discovery** — iOS app auto-discovers your Mac on the local network
 - **Multiple Connection Methods** — SSH tunnels, Tailscale/mesh VPNs, or direct LAN connections
 - **Easy Setup** — Configuration scripts and environment variable-based setup
 
 ## Features
 
+### macOS App
 - **Notch UI** — Animated overlay that expands from the MacBook notch
 - **Live Session Monitoring** — Track multiple Claude Code sessions in real-time
 - **Permission Approvals** — Approve or deny tool executions directly from the notch
 - **Chat History** — View full conversation history with markdown rendering
 - **Auto-Setup** — Hooks install automatically on first launch
-- **Remote Access** — TCP support for remote Claude Code sessions (new!)
+- **Remote Access** — TCP support for remote Claude Code sessions
+
+### iOS Companion App
+- **Session Grid** — View all active Claude Code sessions at a glance
+- **Permission Approvals** — Approve or deny tool permissions from your iPhone
+- **Real-time Updates** — Status indicators show session phase (processing, waiting, needs approval)
+- **Auto-Discovery** — Finds your Mac automatically via Bonjour/mDNS
+- **Secure Connection** — Same token-based authentication as remote connections
 
 ## Requirements
 
+### macOS App
 - macOS 14.0+ (Sonoma) or macOS 15.0+ (Sequoia)
 - Claude Code CLI
 - For remote connections: Network access between machines (SSH, Tailscale, or LAN)
 
+### iOS App
+- iOS 16.0+
+- iPhone on the same network as your Mac (or connected via Tailscale)
+
 ## Install
+
+### macOS App
 
 Download the latest release or build from source:
 
 ```bash
 git clone https://github.com/Jmi2020/claude-nook.git
-cd claude-nook/ClaudeNook
+cd claude-nook
 xcodebuild -scheme ClaudeNook -configuration Release build
 ```
 
 The built app will be in `~/Library/Developer/Xcode/DerivedData/ClaudeNook-*/Build/Products/Release/`
+
+### iOS App
+
+Build and install via Xcode:
+
+```bash
+# Open the project
+open ClaudeNook.xcodeproj
+
+# In Xcode:
+# 1. Select the "ClaudeNookiOS" scheme
+# 2. Select your iPhone or iOS Simulator
+# 3. Press Cmd+R to build and run
+```
+
+Or build from command line:
+
+```bash
+xcodebuild -scheme "ClaudeNookiOS" -destination "platform=iOS Simulator,name=iPhone 16" -configuration Debug build
+```
 
 ## Updating
 
@@ -113,6 +150,21 @@ nc -zv $CLAUDE_NOOK_HOST $CLAUDE_NOOK_PORT
 
 For detailed instructions, see [REMOTE_SETUP.md](REMOTE_SETUP.md).
 
+### iOS Companion App
+
+1. Build and install the iOS app on your iPhone (see Install section)
+2. Make sure your Mac and iPhone are on the same network
+3. In Claude Nook on your Mac:
+   - Enable TCP with "All Interfaces" mode
+   - Note the auth token (click "Copy")
+4. Launch the iOS app:
+   - Your Mac should appear in "Discovered Macs" via Bonjour
+   - Tap to select it, or enter the host/port manually
+   - Paste the 64-character auth token
+   - Tap "Connect"
+
+Once connected, you'll see all active Claude Code sessions. When a tool needs permission approval, a sheet will appear — tap "Approve" or "Deny" right from your iPhone.
+
 ## How It Works
 
 ### Local Mode
@@ -169,8 +221,8 @@ See [REMOTE_SETUP.md](REMOTE_SETUP.md) for detailed setup instructions for each 
 
 ## Documentation
 
+- [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) — Full setup guide for macOS, iOS, and remote machines
 - [REMOTE_SETUP.md](REMOTE_SETUP.md) — Detailed remote setup guide
-- [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) — Technical implementation details
 
 ## Contributing
 
@@ -194,4 +246,4 @@ Apache 2.0
 ## Credits
 
 - Original [claude-island](https://github.com/farouqaldori/claude-island) by [@farouqaldori](https://github.com/farouqaldori)
-- TCP remote support by [@Jmi2020](https://github.com/Jmi2020)
+- TCP remote support and iOS companion app by [@Jmi2020](https://github.com/Jmi2020)

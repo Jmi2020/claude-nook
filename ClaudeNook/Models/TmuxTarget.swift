@@ -5,6 +5,7 @@
 //  Data model for tmux session/window/pane targeting
 //
 
+import ClaudeNookShared
 import Foundation
 
 /// Represents a tmux target (session:window.pane)

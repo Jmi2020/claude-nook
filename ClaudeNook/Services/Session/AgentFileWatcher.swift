@@ -6,6 +6,7 @@
 //  Each Task tool gets its own watcher for its agent file.
 //
 
+import ClaudeNookShared
 import Foundation
 import os.log
 
