@@ -119,4 +119,28 @@ class ConnectionViewModel: ObservableObject {
         let token = KeychainHelper.getToken(for: last.host)
         connectManually(host: last.host, port: last.port, token: token)
     }
+
+    /// Approve a permission request
+    func approve(sessionId: String, toolUseId: String) {
+        Task {
+            do {
+                try await nookClient?.send(.approve(sessionId: sessionId, toolUseId: toolUseId))
+                logger.info("Approved \(toolUseId) for session \(sessionId)")
+            } catch {
+                logger.error("Failed to approve: \(error)")
+            }
+        }
+    }
+
+    /// Deny a permission request
+    func deny(sessionId: String, toolUseId: String, reason: String?) {
+        Task {
+            do {
+                try await nookClient?.send(.deny(sessionId: sessionId, toolUseId: toolUseId, reason: reason))
+                logger.info("Denied \(toolUseId) for session \(sessionId)")
+            } catch {
+                logger.error("Failed to deny: \(error)")
+            }
+        }
+    }
 }

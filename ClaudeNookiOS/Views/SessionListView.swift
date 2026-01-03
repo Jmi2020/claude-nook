@@ -2,7 +2,7 @@
 //  SessionListView.swift
 //  ClaudeNookiOS
 //
-//  Grid view of active Claude sessions.
+//  List view of active Claude sessions matching macOS Nook design.
 //
 
 import ClaudeNookShared
@@ -13,11 +13,29 @@ struct SessionListView: View {
     @EnvironmentObject var sessionStore: iOSSessionStore
 
     @State private var showSettings = false
+    @State private var selectedSession: SessionStateLight?
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
-    ]
+    /// Priority: active (approval/processing/compacting) > waitingForInput > idle
+    private var sortedSessions: [SessionStateLight] {
+        sessionStore.sessions.sorted { a, b in
+            let priorityA = phasePriority(a.phase)
+            let priorityB = phasePriority(b.phase)
+            if priorityA != priorityB {
+                return priorityA < priorityB
+            }
+            // Sort by last activity (more recent first)
+            return a.lastActivity > b.lastActivity
+        }
+    }
+
+    /// Lower number = higher priority
+    private func phasePriority(_ phase: SessionPhase) -> Int {
+        switch phase {
+        case .waitingForApproval, .processing, .compacting: return 0
+        case .waitingForInput: return 1
+        case .idle, .ended: return 2
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,19 +47,23 @@ struct SessionListView: View {
                     if sessionStore.sessions.isEmpty {
                         EmptySessionsView()
                     } else {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(sessionStore.sessions) { session in
-                                NavigationLink(value: session) {
-                                    SessionCard(session: session)
-                                }
-                                .buttonStyle(.plain)
+                        LazyVStack(spacing: 4) {
+                            ForEach(sortedSessions) { session in
+                                SessionRow(
+                                    session: session,
+                                    onChat: { selectedSession = session },
+                                    onApprove: { approveSession(session) },
+                                    onDeny: { denySession(session) }
+                                )
                             }
                         }
-                        .padding()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                     }
                 }
             }
             .navigationTitle("Sessions")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SessionStateLight.self) { session in
                 SessionDetailView(session: session)
             }
@@ -55,7 +77,7 @@ struct SessionListView: View {
                         showSettings = true
                     } label: {
                         Image(systemName: "gear")
-                            .foregroundStyle(.nookAccent)
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
             }
@@ -64,6 +86,9 @@ struct SessionListView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 SettingsSheet()
+            }
+            .sheet(item: $selectedSession) { session in
+                SessionDetailView(session: session)
             }
             .refreshable {
                 await sessionStore.refresh()
@@ -74,25 +99,33 @@ struct SessionListView: View {
         }
         .preferredColorScheme(.dark)
     }
+
+    private func approveSession(_ session: SessionStateLight) {
+        guard case .waitingForApproval(let context) = session.phase else { return }
+        connectionVM.approve(sessionId: session.sessionId, toolUseId: context.toolUseId)
+    }
+
+    private func denySession(_ session: SessionStateLight) {
+        guard case .waitingForApproval(let context) = session.phase else { return }
+        connectionVM.deny(sessionId: session.sessionId, toolUseId: context.toolUseId, reason: nil)
+    }
 }
 
 struct EmptySessionsView: View {
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 60))
-                .foregroundStyle(.nookAccent.opacity(0.5))
+                .font(.system(size: 50))
+                .foregroundStyle(.white.opacity(0.2))
 
-            Text("No Active Sessions")
-                .font(.title2.bold())
-                .foregroundStyle(.white)
+            Text("No sessions")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white.opacity(0.4))
 
-            Text("Start a Claude Code session on your Mac to see it here")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Text("Run claude in terminal")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.25))
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 100)
     }
@@ -104,12 +137,12 @@ struct ConnectionStatusIndicator: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(connectionVM.isConnected ? .green : .red)
+                .fill(connectionVM.isConnected ? TerminalColors.green : TerminalColors.red)
                 .frame(width: 8, height: 8)
 
             Text(connectionVM.isConnected ? "Connected" : "Disconnected")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.5))
         }
     }
 }
@@ -124,29 +157,51 @@ struct SettingsSheet: View {
                 Color.nookBackground
                     .ignoresSafeArea()
 
-                Form {
-                    Section {
-                        if let host = connectionVM.connectedHost {
-                            LabeledContent("Connected To", value: host)
+                VStack(spacing: 16) {
+                    // Connection info
+                    if let host = connectionVM.connectedHost {
+                        VStack(spacing: 8) {
+                            HStack {
+                                Circle()
+                                    .fill(TerminalColors.green)
+                                    .frame(width: 8, height: 8)
+                                Text("Connected")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
+                            Text(host)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
                         }
-
-                        Button(role: .destructive) {
-                            connectionVM.disconnect()
-                            dismiss()
-                        } label: {
-                            Text("Disconnect")
-                        }
-                    } header: {
-                        Text("Connection")
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.nookSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
 
-                    Section {
-                        LabeledContent("Version", value: "1.0.0")
-                    } header: {
-                        Text("About")
+                    // Disconnect button
+                    Button {
+                        connectionVM.disconnect()
+                        dismiss()
+                    } label: {
+                        Text("Disconnect")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(TerminalColors.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(TerminalColors.red.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    // Version
+                    Text("Claude Nook iOS v1.0.0")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.3))
                 }
-                .scrollContentBackground(.hidden)
+                .padding()
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -155,7 +210,7 @@ struct SettingsSheet: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundStyle(.nookAccent)
+                    .foregroundStyle(.white.opacity(0.7))
                 }
             }
             .toolbarBackground(Color.nookBackground, for: .navigationBar)
