@@ -104,27 +104,27 @@ struct InlineApprovalButtons: View {
                 .opacity(showChatButton ? 1 : 0)
                 .scaleEffect(showChatButton ? 1 : 0.8)
 
+            // Deny button - red X
             Button(action: onDeny) {
-                Text("Deny")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.1))
-                    .clipShape(Capsule())
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(TerminalColors.red)
+                    .frame(width: 36, height: 36)
+                    .background(TerminalColors.red.opacity(0.15))
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .opacity(showDenyButton ? 1 : 0)
             .scaleEffect(showDenyButton ? 1 : 0.8)
 
+            // Approve button - green checkmark
             Button(action: onApprove) {
-                Text("Allow")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.9))
-                    .clipShape(Capsule())
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(TerminalColors.green)
+                    .frame(width: 36, height: 36)
+                    .background(TerminalColors.green.opacity(0.15))
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .opacity(showAllowButton ? 1 : 0)

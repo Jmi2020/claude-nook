@@ -98,6 +98,19 @@ struct PermissionRequestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.nookBackground, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        // Clear the pending permission so it doesn't reopen
+                        sessionStore.pendingPermission = nil
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white.opacity(0.6))
+                            .font(.title2)
+                    }
+                }
+            }
             .alert("Deny Request", isPresented: $showDenyReason) {
                 TextField("Reason (optional)", text: $denyReason)
 
