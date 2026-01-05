@@ -77,6 +77,7 @@ struct TCPConfiguration: Codable, Equatable {
 /// Notification posted when TCP configuration changes
 extension Notification.Name {
     static let tcpConfigurationChanged = Notification.Name("tcpConfigurationChanged")
+    static let hookSocketStateChanged = Notification.Name("hookSocketStateChanged")
 }
 
 @MainActor
