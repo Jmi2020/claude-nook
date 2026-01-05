@@ -542,7 +542,8 @@ class HookSocketServer {
 
     /// Authenticate TCP client using AUTH protocol
     /// Tailscale IPs (100.64.0.0/10) are auto-trusted if trustTailscale is enabled
-    private func authenticateTCPClient(_ clientSocket: Int32, address: String) -> Bool {
+    /// Returns (success, leftoverData) - leftover data is anything read after the AUTH line
+    private func authenticateTCPClient(_ clientSocket: Int32, address: String) -> (success: Bool, leftover: Data?) {
         // Check if this is a trusted Tailscale connection
         if trustTailscale && TCPConfiguration.isTailscaleIP(address) {
             logger.info("TCP: Auto-trusting Tailscale connection from \(address, privacy: .public)")
@@ -551,7 +552,7 @@ class HookSocketServer {
             _ = okResponse.withCString { ptr in
                 write(clientSocket, ptr, strlen(ptr))
             }
-            return true
+            return (true, nil)
         }
 
         // Read auth line (AUTH <token>\n)
@@ -563,36 +564,45 @@ class HookSocketServer {
         guard pollResult > 0 else {
             logger.warning("TCP: Auth timeout from \(address, privacy: .public)")
             sendTCPError(to: clientSocket, message: "Auth timeout")
-            return false
+            return (false, nil)
         }
 
         let bytesRead = read(clientSocket, &authBuffer, authBuffer.count)
         guard bytesRead > 0 else {
             logger.warning("TCP: No auth data from \(address, privacy: .public)")
-            return false
+            return (false, nil)
         }
 
         // Parse auth line
         guard let authString = String(bytes: authBuffer[0..<bytesRead], encoding: .utf8) else {
             sendTCPError(to: clientSocket, message: "Invalid auth format")
-            return false
+            return (false, nil)
         }
 
         // Find newline and extract auth part
         guard let newlineIndex = authString.firstIndex(of: "\n") else {
             sendTCPError(to: clientSocket, message: "Invalid auth format")
-            return false
+            return (false, nil)
         }
 
         let authLine = String(authString[..<newlineIndex])
+        logger.info("TCP: Received auth line (len=\(authLine.count))")
+
         let parts = authLine.split(separator: " ", maxSplits: 1)
 
-        guard parts.count == 2,
-              parts[0] == "AUTH",
-              String(parts[1]) == expectedToken else {
-            logger.warning("TCP: Auth failed from \(address, privacy: .public)")
+        guard parts.count == 2, parts[0] == "AUTH" else {
+            let firstPart = parts.first.map { String($0) } ?? "nil"
+            logger.error("TCP: Invalid AUTH format from \(address, privacy: .public) - parts: \(parts.count), first='\(firstPart, privacy: .public)'")
+            sendTCPError(to: clientSocket, message: "Invalid auth format")
+            return (false, nil)
+        }
+
+        let receivedToken = String(parts[1])
+
+        guard receivedToken == expectedToken else {
+            logger.warning("TCP: Auth failed - token mismatch from \(address, privacy: .public)")
             sendTCPError(to: clientSocket, message: "Invalid token")
-            return false
+            return (false, nil)
         }
 
         // Send OK response
@@ -602,7 +612,16 @@ class HookSocketServer {
         }
 
         logger.info("TCP: Authenticated client from \(address, privacy: .public)")
-        return true
+
+        // Check for leftover data after AUTH line (e.g., SUBSCRIBE sent in same packet)
+        let afterNewline = authString.index(after: newlineIndex)
+        if afterNewline < authString.endIndex {
+            let leftoverString = String(authString[afterNewline...])
+            logger.info("TCP: Found leftover data after AUTH: '\(leftoverString.prefix(20), privacy: .public)'")
+            return (true, leftoverString.data(using: .utf8))
+        }
+
+        return (true, nil)
     }
 
     /// Send error message to TCP client
@@ -638,6 +657,9 @@ class HookSocketServer {
             return
         }
 
+        logger.info("PAIR: Returning token: \(token.prefix(8), privacy: .public)... (len=\(token.count))")
+        logger.info("PAIR: Expected token is: \(self.expectedToken.prefix(8), privacy: .public)... (len=\(self.expectedToken.count))")
+
         // Send the token back
         let response = "TOKEN \(token)\n"
         _ = response.withCString { ptr in
@@ -667,13 +689,14 @@ class HookSocketServer {
     private func sendInitialState(to clientId: UUID) async {
         guard let provider = sessionStateProvider else {
             logger.warning("iOS: No session state provider - sending empty state")
-            let emptySnapshot = StateSnapshotData(sessions: [])
+            let emptySnapshot = StateSnapshot(sessions: [])
             iOSConnectionManager.shared.send(.state(emptySnapshot), to: clientId)
             return
         }
 
         let sessions = await provider()
-        let snapshot = StateSnapshotData(sessions: sessions)
+        let lightSessions = sessions.map { SessionStateLight(from: $0) }
+        let snapshot = StateSnapshot(sessions: lightSessions)
         iOSConnectionManager.shared.send(.state(snapshot), to: clientId)
 
         logger.info("iOS: Sent initial state with \(sessions.count) sessions")
@@ -683,7 +706,7 @@ class HookSocketServer {
     func broadcastSessionUpdate(_ session: SessionState) {
         guard iOSConnectionManager.shared.hasClients else { return }
 
-        let lightSession = SessionStateLightData(from: session)
+        let lightSession = SessionStateLight(from: session)
         iOSConnectionManager.shared.broadcast(.sessionUpdate(lightSession))
     }
 
@@ -698,7 +721,7 @@ class HookSocketServer {
     func broadcastPermissionRequest(sessionId: String, toolUseId: String, toolName: String, toolInput: String?, projectName: String) {
         guard iOSConnectionManager.shared.hasClients else { return }
 
-        let request = PermissionRequestData(
+        let request = PermissionRequest(
             sessionId: sessionId,
             toolUseId: toolUseId,
             toolName: toolName,
@@ -714,13 +737,57 @@ class HookSocketServer {
     }
 
     private func handleClient(_ clientSocket: Int32, connectionType: ConnectionType) {
-        // For TCP connections, authenticate first
+        // For TCP connections, check for PAIR command first (no auth needed)
+        // then authenticate other connections
         var clientAddress = ""
         if case .tcp(let address) = connectionType {
             clientAddress = address
-            guard authenticateTCPClient(clientSocket, address: address) else {
+
+            // Peek at first few bytes to check for PAIR command
+            // PAIR commands don't require authentication - they're used to GET a token
+            var peekBuffer = [UInt8](repeating: 0, count: 16)
+            var pollFd = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)
+            let pollResult = poll(&pollFd, 1, 5000)
+
+            if pollResult > 0 {
+                // Peek without consuming the data
+                let peeked = recv(clientSocket, &peekBuffer, peekBuffer.count, MSG_PEEK)
+                if peeked > 0,
+                   let peekStr = String(bytes: peekBuffer[0..<peeked], encoding: .utf8),
+                   peekStr.hasPrefix("PAIR ") {
+                    // This is a PAIR command - handle without authentication
+                    logger.info("TCP: Detected PAIR command from \(address, privacy: .public)")
+
+                    // Now read the full line
+                    var pairBuffer = [UInt8](repeating: 0, count: 256)
+                    let bytesRead = read(clientSocket, &pairBuffer, pairBuffer.count)
+                    if bytesRead > 0,
+                       let pairStr = String(bytes: pairBuffer[0..<bytesRead], encoding: .utf8) {
+                        let trimmed = pairStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                        handlePairCommand(clientSocket, command: trimmed, address: address)
+                        return
+                    }
+                    close(clientSocket)
+                    return
+                }
+            }
+
+            // Not a PAIR command - require authentication
+            let authResult = authenticateTCPClient(clientSocket, address: address)
+            guard authResult.success else {
                 close(clientSocket)
                 return
+            }
+
+            // Check if leftover data contains SUBSCRIBE
+            if let leftover = authResult.leftover,
+               let leftoverStr = String(data: leftover, encoding: .utf8) {
+                let trimmed = leftoverStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed == "SUBSCRIBE" {
+                    logger.info("TCP: Found SUBSCRIBE in leftover data from \(address, privacy: .public)")
+                    handleSubscribeClient(clientSocket, address: address)
+                    return
+                }
             }
         }
 

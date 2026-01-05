@@ -26,7 +26,7 @@ actor NookClient {
 
     /// Connect to the server
     func connect(host: String, port: Int, token: String?) async throws {
-        logger.info("Connecting to \(host):\(port)")
+        logger.info("Connecting to \(host):\(port), token=\(token?.prefix(8) ?? "nil")")
 
         let endpoint = NWEndpoint.hostPort(
             host: NWEndpoint.Host(host),
@@ -54,23 +54,31 @@ actor NookClient {
     ) async {
         switch state {
         case .ready:
-            logger.info("Connection ready")
+            logger.info("Connection ready, sending AUTH and SUBSCRIBE")
 
             // Authenticate
             if let token = token {
                 let authMessage = "AUTH \(token)\n"
-                connection?.send(content: authMessage.data(using: .utf8)!, completion: .contentProcessed { error in
+                logger.info("Sending AUTH (len=\(authMessage.count))")
+                connection?.send(content: authMessage.data(using: .utf8)!, completion: .contentProcessed { [self] error in
                     if let error = error {
-                        print("Failed to send AUTH: \(error)")
+                        logger.error("Failed to send AUTH: \(error)")
+                    } else {
+                        logger.info("AUTH sent successfully")
                     }
                 })
+            } else {
+                logger.warning("No token provided, skipping AUTH")
             }
 
             // Send SUBSCRIBE to enter persistent mode
             let subscribeMessage = "SUBSCRIBE\n"
-            connection?.send(content: subscribeMessage.data(using: .utf8)!, completion: .contentProcessed { error in
+            logger.info("Sending SUBSCRIBE")
+            connection?.send(content: subscribeMessage.data(using: .utf8)!, completion: .contentProcessed { [self] error in
                 if let error = error {
-                    print("Failed to send SUBSCRIBE: \(error)")
+                    logger.error("Failed to send SUBSCRIBE: \(error)")
+                } else {
+                    logger.info("SUBSCRIBE sent successfully")
                 }
             })
 
@@ -191,6 +199,7 @@ actor NookClient {
             // Try to decode as ServerMessage
             do {
                 let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
                 let message = try decoder.decode(ServerMessage.self, from: lineData)
 
                 if let handler = messageHandler {

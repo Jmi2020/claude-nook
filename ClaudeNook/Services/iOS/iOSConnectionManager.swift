@@ -193,8 +193,21 @@ class iOSConnectionManager {
         var buffer = [UInt8](repeating: 0, count: 4096)
         let bytesRead = read(socket, &buffer, buffer.count)
 
-        if bytesRead <= 0 {
-            // Client disconnected
+        if bytesRead < 0 {
+            // Check if it's just EAGAIN (no data available on non-blocking socket)
+            if errno == EAGAIN || errno == EWOULDBLOCK {
+                // No data available yet, not a disconnect
+                return
+            }
+            // Actual error - client disconnected
+            logger.warning("Read error from iOS client: errno \(errno)")
+            removeClient(clientId)
+            messageHandler?(clientId, .disconnect)
+            return
+        }
+
+        if bytesRead == 0 {
+            // Connection closed by peer
             removeClient(clientId)
             messageHandler?(clientId, .disconnect)
             return
@@ -295,7 +308,7 @@ struct ServerMessageWrapper: Codable {
     }
 
     // Convenience initializers for specific message types
-    static func state(_ snapshot: StateSnapshotData) -> ServerMessageWrapper {
+    static func state(_ snapshot: StateSnapshot) -> ServerMessageWrapper {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(snapshot),
@@ -305,10 +318,10 @@ struct ServerMessageWrapper: Codable {
         return ServerMessageWrapper(type: "state")
     }
 
-    static func sessionUpdate(_ session: SessionStateLightData) -> ServerMessageWrapper {
+    static func sessionUpdate(_ session: SessionStateLight) -> ServerMessageWrapper {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(SessionUpdateData(session: session)),
+        if let data = try? encoder.encode(SessionUpdate(session: session)),
            let dict = try? JSONSerialization.jsonObject(with: data) {
             return ServerMessageWrapper(type: "sessionUpdate", payload: dict)
         }
@@ -319,7 +332,7 @@ struct ServerMessageWrapper: Codable {
         return ServerMessageWrapper(type: "sessionRemoved", payload: sessionId)
     }
 
-    static func permissionRequest(_ request: PermissionRequestData) -> ServerMessageWrapper {
+    static func permissionRequest(_ request: PermissionRequest) -> ServerMessageWrapper {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(request),
@@ -346,63 +359,8 @@ struct ClientMessageWrapper: Codable {
 }
 
 // MARK: - Data Transfer Objects
-
-/// Lightweight session state for iOS
-struct SessionStateLightData: Codable {
-    let sessionId: String
-    let projectName: String
-    let phase: String
-    let lastActivity: Date
-    let createdAt: Date
-    let displayTitle: String
-    let pendingToolName: String?
-    let pendingToolInput: String?
-    let needsAttention: Bool
-
-    init(from session: SessionState) {
-        self.sessionId = session.sessionId
-        self.projectName = session.projectName
-        self.phase = session.phase.rawValue
-        self.lastActivity = session.lastActivity
-        self.createdAt = session.createdAt
-        self.displayTitle = session.displayTitle
-        self.pendingToolName = session.pendingToolName
-        self.pendingToolInput = session.pendingToolInput
-        self.needsAttention = session.needsAttention
-    }
-}
-
-/// Session update wrapper
-struct SessionUpdateData: Codable {
-    let session: SessionStateLightData
-}
-
-/// Full state snapshot for iOS
-struct StateSnapshotData: Codable {
-    let sessions: [SessionStateLightData]
-    let timestamp: Date
-
-    init(sessions: [SessionState]) {
-        self.sessions = sessions.map { SessionStateLightData(from: $0) }
-        self.timestamp = Date()
-    }
-}
-
-/// Permission request for iOS
-struct PermissionRequestData: Codable {
-    let sessionId: String
-    let toolUseId: String
-    let toolName: String
-    let toolInput: String?
-    let projectName: String
-    let receivedAt: Date
-
-    init(sessionId: String, toolUseId: String, toolName: String, toolInput: String?, projectName: String) {
-        self.sessionId = sessionId
-        self.toolUseId = toolUseId
-        self.toolName = toolName
-        self.toolInput = toolInput
-        self.projectName = projectName
-        self.receivedAt = Date()
-    }
-}
+// Now using types from ClaudeNookShared:
+// - SessionStateLight (replaces SessionStateLightData)
+// - SessionUpdate (replaces SessionUpdateData)
+// - StateSnapshot (replaces StateSnapshotData)
+// - PermissionRequest (replaces PermissionRequestData)

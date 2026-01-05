@@ -37,6 +37,20 @@ class BonjourDiscovery: ObservableObject {
         logger.info("Starting Bonjour discovery for _claudenook._tcp")
         isScanning = true
 
+        // Add localhost as a fallback for simulator testing
+        #if targetEnvironment(simulator)
+        let localhostHost = DiscoveredHost(
+            id: "localhost-4851",
+            name: "Localhost (Simulator)",
+            address: "127.0.0.1",
+            port: 4851
+        )
+        if !discoveredHosts.contains(where: { $0.id == localhostHost.id }) {
+            discoveredHosts.append(localhostHost)
+            logger.info("Added localhost for simulator testing")
+        }
+        #endif
+
         let descriptor = NWBrowser.Descriptor.bonjour(type: "_claudenook._tcp", domain: "local.")
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
@@ -124,7 +138,7 @@ class BonjourDiscovery: ObservableObject {
             switch state {
             case .ready:
                 if case .hostPort(let host, let port) = connection.currentPath?.remoteEndpoint {
-                    let hostString: String
+                    var hostString: String
                     switch host {
                     case .name(let hostname, _):
                         hostString = hostname
@@ -136,6 +150,14 @@ class BonjourDiscovery: ObservableObject {
                         hostString = "unknown"
                     }
 
+                    // Strip interface/zone ID suffix (e.g., "%bridge100", "%en0")
+                    // This is common with IPv6 link-local addresses and simulator bridge networks
+                    let originalHost = hostString
+                    if let percentIndex = hostString.firstIndex(of: "%") {
+                        hostString = String(hostString[..<percentIndex])
+                        logger.info("Stripped interface suffix: \(originalHost) -> \(hostString)")
+                    }
+
                     let discovered = DiscoveredHost(
                         id: "\(name)-\(hostString):\(port.rawValue)",
                         name: name,
@@ -143,7 +165,7 @@ class BonjourDiscovery: ObservableObject {
                         port: Int(port.rawValue)
                     )
 
-                    logger.info("Resolved \(name) to \(hostString):\(port.rawValue)")
+                    logger.info("Resolved \(name) to \(hostString):\(port.rawValue) (original: \(originalHost))")
                     connection.cancel()
                     completion(discovered)
                 }

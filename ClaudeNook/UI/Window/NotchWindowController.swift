@@ -76,8 +76,10 @@ class NotchWindowController: NSWindowController {
                     notchWindow?.orderFrontRegardless()
                     // Don't steal focus when opened by notification (task finished)
                     if viewModel?.openReason != .notification {
-                        NSApp.activate(ignoringOtherApps: false)
+                        // Force activation even if another app is frontmost
+                        NSApp.activate(ignoringOtherApps: true)
                         notchWindow?.makeKey()
+                        notchWindow?.makeFirstResponder(notchWindow?.contentView)
                     }
                 case .closed, .popping:
                     // Ignore mouse events when closed so clicks pass through

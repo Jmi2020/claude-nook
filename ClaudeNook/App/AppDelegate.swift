@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
     private var updateCheckTimer: Timer?
+    private var statusBarController: StatusBarController?
 
     static var shared: AppDelegate?
     let updater: SPUUpdater
@@ -72,6 +73,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         windowManager = WindowManager()
         _ = windowManager?.setupNotchWindow()
+
+        statusBarController = StatusBarController()
 
         screenObserver = ScreenObserver { [weak self] in
             self?.handleScreenChange()

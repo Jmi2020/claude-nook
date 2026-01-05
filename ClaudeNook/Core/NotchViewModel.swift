@@ -183,16 +183,15 @@ class NotchViewModel: ObservableObject {
 
         switch status {
         case .opened:
+            // Only close if clicking outside the entire panel
+            // (The header/sandwich button overlaps with notchScreenRect, so we can't
+            // close on notch clicks when opened - SwiftUI buttons need to receive clicks)
             if geometry.isPointOutsidePanel(location, size: openedSize) {
                 notchClose()
                 // Re-post the click so it reaches the window/app behind us
                 repostClickAt(location)
-            } else if geometry.notchScreenRect.contains(location) {
-                // Clicking notch while opened - only close if NOT in chat mode
-                if !isInChatMode {
-                    notchClose()
-                }
             }
+            // If inside the panel, let SwiftUI handle the click (buttons, etc.)
         case .closed, .popping:
             if geometry.isPointInNotch(location) {
                 notchOpen(reason: .click)

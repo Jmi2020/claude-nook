@@ -315,21 +315,17 @@ struct NotchView: View {
 
             Spacer()
 
-            // Menu toggle
+            // Menu toggle - larger hit area for reliability
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.toggleMenu()
-                    if viewModel.contentType == .menu {
-                        updateManager.markUpdateSeen()
-                    }
+                viewModel.toggleMenu()
+                if viewModel.contentType == .menu {
+                    updateManager.markUpdateSeen()
                 }
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: viewModel.contentType == .menu ? "xmark" : "line.3.horizontal")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.white.opacity(0.4))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
 
                     // Green dot for unseen update
                     if updateManager.hasUnseenUpdate && viewModel.contentType != .menu {
@@ -339,8 +335,11 @@ struct NotchView: View {
                             .offset(x: -2, y: 2)
                     }
                 }
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.trailing, 4)
         }
     }
 

@@ -26,7 +26,7 @@ class NotchPanel: NSPanel {
 
         // Floating panel behavior
         isFloatingPanel = true
-        becomesKeyOnlyIfNeeded = true
+        becomesKeyOnlyIfNeeded = false  // Always become key when clicked
 
         // Transparent configuration
         isOpaque = false
@@ -67,9 +67,8 @@ class NotchPanel: NSPanel {
     // MARK: - Click-through for areas outside the panel content
 
     override func sendEvent(_ event: NSEvent) {
-        // For mouse events, check if we should pass through
-        if event.type == .leftMouseDown || event.type == .leftMouseUp ||
-           event.type == .rightMouseDown || event.type == .rightMouseUp {
+        // For mouse down events, check if we should pass through or handle
+        if event.type == .leftMouseDown || event.type == .rightMouseDown {
             // Get the location in window coordinates
             let locationInWindow = event.locationInWindow
 
@@ -77,15 +76,17 @@ class NotchPanel: NSPanel {
             if let contentView = self.contentView,
                contentView.hitTest(locationInWindow) == nil {
                 // No view wants this event - pass it through to windows behind
-                // by temporarily ignoring mouse events and re-posting
                 let screenLocation = convertPoint(toScreen: locationInWindow)
-                ignoresMouseEvents = true
-
-                // Re-post the event after a tiny delay
-                DispatchQueue.main.async { [weak self] in
-                    self?.repostMouseEvent(event, at: screenLocation)
-                }
+                repostMouseEvent(event, at: screenLocation)
                 return
+            }
+
+            // A view wants to handle this - ensure app is active and we're key
+            if !NSApp.isActive {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            if !isKeyWindow {
+                makeKey()
             }
         }
 

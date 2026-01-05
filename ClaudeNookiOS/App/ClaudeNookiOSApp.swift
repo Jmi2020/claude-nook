@@ -19,6 +19,10 @@ struct ClaudeNookiOSApp: App {
             ContentView()
                 .environmentObject(connectionVM)
                 .environmentObject(sessionStore)
+                .task {
+                    // Connect the session store to the view model
+                    connectionVM.setSessionStore(sessionStore)
+                }
         }
     }
 }
