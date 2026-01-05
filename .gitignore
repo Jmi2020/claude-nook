@@ -84,3 +84,4 @@ coverage/
 
 # Local docs not meant for git
 CLAUDE.md
+__pycache__/
