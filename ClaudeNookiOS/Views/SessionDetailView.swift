@@ -12,6 +12,7 @@ struct SessionDetailView: View {
     let session: SessionStateLight
 
     @EnvironmentObject var sessionStore: iOSSessionStore
+    @Environment(\.dismiss) var dismiss
 
     var body: some View {
         ZStack {
@@ -122,6 +123,17 @@ struct SessionDetailView: View {
         .toolbarBackground(Color.nookBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.title2)
+                }
+            }
+        }
     }
 
     private func toolIcon(for tool: String) -> String {

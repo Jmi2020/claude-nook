@@ -88,7 +88,9 @@ struct SessionListView: View {
                 SettingsSheet()
             }
             .sheet(item: $selectedSession) { session in
-                SessionDetailView(session: session)
+                NavigationStack {
+                    SessionDetailView(session: session)
+                }
             }
             .refreshable {
                 await sessionStore.refresh()
