@@ -41,6 +41,12 @@ struct NotchMenuView: View {
             IdleTimeoutPickerRow(selector: idleTimeoutSelector)
             NetworkSettingsRow(networkSettings: networkSettings)
 
+            HStack {
+                ConnectionStatusPill()
+                Spacer()
+            }
+            .padding(.leading, 12)
+
             Divider()
                 .background(Color.white.opacity(0.08))
                 .padding(.vertical, 4)

@@ -93,6 +93,18 @@ class HookSocketServer {
         }
     }
 
+    private func notifySocketState() {
+        let unixRunning = serverSocket >= 0
+        let tcpRunning = tcpSocket >= 0
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .hookSocketStateChanged,
+                object: nil,
+                userInfo: ["unix": unixRunning, "tcp": tcpRunning]
+            )
+        }
+    }
+
     deinit {
         if let observer = configObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -217,6 +229,7 @@ class HookSocketServer {
             }
         }
         acceptSource?.resume()
+        notifySocketState()
     }
 
     // MARK: - TCP Socket Server
@@ -309,6 +322,7 @@ class HookSocketServer {
             }
         }
         tcpAcceptSource?.resume()
+        notifySocketState()
 
         // Start Bonjour advertising if enabled
         if bonjourEnabled {
@@ -340,6 +354,7 @@ class HookSocketServer {
             close(tcpSocket)
             tcpSocket = -1
         }
+        notifySocketState()
     }
 
     /// Stop the socket server
@@ -348,6 +363,7 @@ class HookSocketServer {
         acceptSource?.cancel()
         acceptSource = nil
         unlink(Self.socketPath)
+        serverSocket = -1
 
         // Stop TCP socket
         stopTCPServer()
@@ -358,6 +374,8 @@ class HookSocketServer {
         }
         pendingPermissions.removeAll()
         permissionsLock.unlock()
+
+        notifySocketState()
     }
 
     /// Respond to a pending permission request by toolUseId
