@@ -22,6 +22,9 @@ struct ClaudeNookiOSApp: App {
                 .task {
                     // Connect the session store to the view model
                     connectionVM.setSessionStore(sessionStore)
+
+                    // Try to reconnect to last saved host
+                    connectionVM.reconnectToLastHost()
                 }
         }
     }

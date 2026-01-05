@@ -48,6 +48,18 @@ struct SessionListView: View {
                         EmptySessionsView()
                     } else {
                         LazyVStack(spacing: 4) {
+                            // Show warning if disconnected
+                            if !connectionVM.isConnected {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("Disconnected - actions disabled")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.orange)
+                                }
+                                .padding(.vertical, 8)
+                            }
+
                             ForEach(sortedSessions) { session in
                                 SessionRow(
                                     session: session,
@@ -55,6 +67,8 @@ struct SessionListView: View {
                                     onApprove: { approveSession(session) },
                                     onDeny: { denySession(session) }
                                 )
+                                .disabled(!connectionVM.isConnected)
+                                .opacity(connectionVM.isConnected ? 1.0 : 0.6)
                             }
                         }
                         .padding(.horizontal, 12)
@@ -103,12 +117,28 @@ struct SessionListView: View {
     }
 
     private func approveSession(_ session: SessionStateLight) {
-        guard case .waitingForApproval(let context) = session.phase else { return }
+        guard case .waitingForApproval(let context) = session.phase else {
+            print("[iOS] approveSession: phase is not waitingForApproval, it's \(session.phase)")
+            return
+        }
+        print("[iOS] approveSession: approving \(context.toolName) (toolUseId: \(context.toolUseId.prefix(12))...)")
+
+        // Immediately update the local session to show feedback
+        sessionStore.updateSessionPhase(sessionId: session.sessionId, to: .processing)
+
         connectionVM.approve(sessionId: session.sessionId, toolUseId: context.toolUseId)
     }
 
     private func denySession(_ session: SessionStateLight) {
-        guard case .waitingForApproval(let context) = session.phase else { return }
+        guard case .waitingForApproval(let context) = session.phase else {
+            print("[iOS] denySession: phase is not waitingForApproval, it's \(session.phase)")
+            return
+        }
+        print("[iOS] denySession: denying \(context.toolName) (toolUseId: \(context.toolUseId.prefix(12))...)")
+
+        // Immediately update the local session to show feedback
+        sessionStore.updateSessionPhase(sessionId: session.sessionId, to: .processing)
+
         connectionVM.deny(sessionId: session.sessionId, toolUseId: context.toolUseId, reason: nil)
     }
 }

@@ -95,4 +95,25 @@ class iOSSessionStore: ObservableObject {
         // Currently the server sends state on subscribe
         // Could add a refresh command if needed
     }
+
+    /// Update session phase locally for immediate feedback
+    func updateSessionPhase(sessionId: String, to newPhase: SessionPhase) {
+        guard let index = sessions.firstIndex(where: { $0.sessionId == sessionId }) else {
+            return
+        }
+
+        let session = sessions[index]
+        let updatedSession = SessionStateLight(
+            sessionId: session.sessionId,
+            projectName: session.projectName,
+            phase: newPhase,
+            lastActivity: Date(),
+            createdAt: session.createdAt,
+            displayTitle: session.displayTitle,
+            pendingToolName: nil,  // Clear pending tool when phase changes
+            pendingToolInput: nil
+        )
+        sessions[index] = updatedSession
+        logger.info("Updated session \(sessionId.prefix(8)) phase to \(newPhase)")
+    }
 }
