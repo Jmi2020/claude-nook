@@ -231,14 +231,6 @@ This fork is designed for potential upstream contribution. The TCP features are:
 - Secure by default (TCP disabled until enabled)
 - Easy to configure (environment variables)
 
-## Analytics
-
-Claude Nook uses Mixpanel to collect anonymous usage data:
-- **App Launched** — App version, build number, macOS version
-- **Session Started** — When a new Claude Code session is detected
-
-No personal data or conversation content is collected.
-
 ## License
 
 Apache 2.0
