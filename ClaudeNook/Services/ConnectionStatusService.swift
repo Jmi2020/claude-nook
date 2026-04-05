@@ -14,6 +14,14 @@ enum ConnectionState: String, Equatable {
     case connected
 }
 
+/// Whether any remote machine is actively communicating
+enum RemoteReachability: String, Equatable {
+    case disabled     // TCP is turned off
+    case unknown      // TCP enabled but no remote has connected yet
+    case reachable    // Remote sent data recently
+    case unreachable  // Was reachable, but no data within health check window
+}
+
 @MainActor
 class ConnectionStatusService: ObservableObject {
     static let shared = ConnectionStatusService()
@@ -21,6 +29,7 @@ class ConnectionStatusService: ObservableObject {
     @Published private(set) var unixState: ConnectionState = .disconnected
     @Published private(set) var tcpState: ConnectionState = .disconnected
     @Published private(set) var tcpEndpoint: String? = nil
+    @Published private(set) var remoteReachability: RemoteReachability = .disabled
 
     var isAnyConnected: Bool {
         unixState == .connected || tcpState == .connected
@@ -28,6 +37,7 @@ class ConnectionStatusService: ObservableObject {
 
     private var configObserver: NSObjectProtocol?
     private var socketObserver: NSObjectProtocol?
+    private var reachabilityObserver: NSObjectProtocol?
 
     private init() {
         configObserver = NotificationCenter.default.addObserver(
@@ -50,6 +60,16 @@ class ConnectionStatusService: ObservableObject {
             }
         }
 
+        reachabilityObserver = NotificationCenter.default.addObserver(
+            forName: .remoteReachabilityChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handleReachabilityChange(notification)
+            }
+        }
+
         updateFromConfiguration()
     }
 
@@ -58,6 +78,9 @@ class ConnectionStatusService: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = socketObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = reachabilityObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -69,6 +92,7 @@ class ConnectionStatusService: ObservableObject {
         case .disabled:
             tcpState = .disconnected
             tcpEndpoint = nil
+            remoteReachability = .disabled
         case .localhost:
             tcpEndpoint = "127.0.0.1:\(config.port)"
         case .anyInterface:
@@ -90,6 +114,18 @@ class ConnectionStatusService: ObservableObject {
             } else {
                 tcpState = tcp ? .connected : .disconnected
             }
+
+            // When TCP stops, reset reachability
+            if !tcp && config.bindMode != .disabled {
+                remoteReachability = .unknown
+            }
         }
+    }
+
+    private func handleReachabilityChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let rawValue = userInfo["reachability"] as? String,
+              let newState = RemoteReachability(rawValue: rawValue) else { return }
+        remoteReachability = newState
     }
 }

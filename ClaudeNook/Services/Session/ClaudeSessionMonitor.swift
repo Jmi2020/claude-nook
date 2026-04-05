@@ -33,9 +33,10 @@ class ClaudeSessionMonitor: ObservableObject {
 
     func startMonitoring() {
         HookSocketServer.shared.start(
-            onEvent: { event in
+            onEvent: { event, isRemote in
+                let origin: SessionOrigin = isRemote ? .remote : .local
                 Task {
-                    await SessionStore.shared.process(.hookReceived(event))
+                    await SessionStore.shared.process(.hookReceived(event, origin: origin))
                 }
 
                 if event.sessionPhase == .processing {

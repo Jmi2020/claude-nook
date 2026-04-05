@@ -31,8 +31,8 @@ struct PendingPermission: Sendable {
     let receivedAt: Date
 }
 
-/// Callback for hook events
-typealias HookEventHandler = @Sendable (HookEvent) -> Void
+/// Callback for hook events (event, isRemote)
+typealias HookEventHandler = @Sendable (HookEvent, Bool) -> Void
 
 /// Callback for permission response failures (socket died)
 typealias PermissionFailureHandler = @Sendable (_ sessionId: String, _ toolUseId: String) -> Void
@@ -76,6 +76,11 @@ class HookSocketServer {
     /// PermissionRequest events don't include tool_use_id, so we cache from PreToolUse
     private var toolUseIdCache: [String: [String]] = [:]
     private let cacheLock = NSLock()
+
+    // MARK: - Remote Health Monitoring
+    private var lastRemoteActivity: Date?
+    private var healthCheckTimer: DispatchSourceTimer?
+    private var currentReachability: String = RemoteReachability.disabled.rawValue
 
     /// Observer for configuration changes
     private var configObserver: NSObjectProtocol?
@@ -323,6 +328,8 @@ class HookSocketServer {
         }
         tcpAcceptSource?.resume()
         notifySocketState()
+        notifyReachability(.unknown)
+        startHealthCheckTimer()
 
         // Start Bonjour advertising if enabled
         if bonjourEnabled {
@@ -348,13 +355,64 @@ class HookSocketServer {
 
     private func stopTCPServer() {
         stopBonjourService()
+        stopHealthCheckTimer()
         tcpAcceptSource?.cancel()
         tcpAcceptSource = nil
         if tcpSocket >= 0 {
             close(tcpSocket)
             tcpSocket = -1
         }
+        lastRemoteActivity = nil
+        notifyReachability(.disabled)
         notifySocketState()
+    }
+
+    // MARK: - Health Check Timer
+
+    private func startHealthCheckTimer() {
+        stopHealthCheckTimer()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 30, repeating: 30)
+        timer.setEventHandler { [weak self] in
+            self?.checkRemoteHealth()
+        }
+        timer.resume()
+        healthCheckTimer = timer
+    }
+
+    private func stopHealthCheckTimer() {
+        healthCheckTimer?.cancel()
+        healthCheckTimer = nil
+    }
+
+    private func checkRemoteHealth() {
+        guard tcpSocket >= 0 else { return }
+
+        if let lastActivity = lastRemoteActivity {
+            let elapsed = Date().timeIntervalSince(lastActivity)
+            if elapsed > 90 {
+                notifyReachability(.unreachable)
+            }
+        }
+        // If lastRemoteActivity is nil and TCP is running, stay in .unknown
+    }
+
+    private func recordRemoteActivity() {
+        lastRemoteActivity = Date()
+        notifyReachability(.reachable)
+    }
+
+    private func notifyReachability(_ state: RemoteReachability) {
+        let rawValue = state.rawValue
+        guard rawValue != currentReachability else { return }
+        currentReachability = rawValue
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .remoteReachabilityChanged,
+                object: nil,
+                userInfo: ["reachability": rawValue]
+            )
+        }
     }
 
     /// Stop the socket server
@@ -554,6 +612,7 @@ class HookSocketServer {
         let clientIP = String(cString: ipBuffer)
 
         logger.debug("TCP: Connection from \(clientIP, privacy: .public)")
+        recordRemoteActivity()
 
         handleClient(clientSocket, connectionType: .tcp(address: clientIP))
     }
@@ -757,8 +816,10 @@ class HookSocketServer {
     private func handleClient(_ clientSocket: Int32, connectionType: ConnectionType) {
         // For TCP connections, check for PAIR command first (no auth needed)
         // then authenticate other connections
+        let isRemote: Bool
         var clientAddress = ""
         if case .tcp(let address) = connectionType {
+            isRemote = true
             clientAddress = address
 
             // Peek at first few bytes to check for PAIR command
@@ -807,6 +868,8 @@ class HookSocketServer {
                     return
                 }
             }
+        } else {
+            isRemote = false
         }
 
         let flags = fcntl(clientSocket, F_GETFL)
@@ -899,7 +962,7 @@ class HookSocketServer {
             } else {
                 logger.warning("Permission request missing tool_use_id for \(event.sessionId.prefix(8), privacy: .public) - no cache hit")
                 close(clientSocket)
-                eventHandler?(event)
+                eventHandler?(event, isRemote)
                 return
             }
 
@@ -930,13 +993,13 @@ class HookSocketServer {
             pendingPermissions[toolUseId] = pending
             permissionsLock.unlock()
 
-            eventHandler?(updatedEvent)
+            eventHandler?(updatedEvent, isRemote)
             return
         } else {
             close(clientSocket)
         }
 
-        eventHandler?(event)
+        eventHandler?(event, isRemote)
     }
 
     private func sendPermissionResponse(toolUseId: String, decision: String, reason: String?) {

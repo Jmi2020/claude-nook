@@ -77,6 +77,14 @@ struct NetworkSettingsRow: View {
                     }
 
                     // Token and port sections (only if TCP enabled)
+                    if !networkSettings.isTCPEnabled {
+                        Text("TCP enables remote machine monitoring and iOS companion app. All local sessions work without it.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.3))
+                            .padding(.horizontal, 10)
+                            .padding(.top, 4)
+                    }
+
                     if networkSettings.isTCPEnabled {
                         Divider()
                             .background(Color.white.opacity(0.08))

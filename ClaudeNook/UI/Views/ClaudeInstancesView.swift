@@ -12,12 +12,30 @@ import SwiftUI
 struct ClaudeInstancesView: View {
     @ObservedObject var sessionMonitor: ClaudeSessionMonitor
     @ObservedObject var viewModel: NotchViewModel
+    @ObservedObject private var connectionStatus = ConnectionStatusService.shared
 
     var body: some View {
-        if sessionMonitor.instances.isEmpty {
-            emptyState
-        } else {
-            instancesList
+        VStack(spacing: 0) {
+            // Remote unreachable banner
+            if connectionStatus.remoteReachability == .unreachable {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 9))
+                    Text("Remote unreachable \u{2014} local sessions only")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(TerminalColors.amber.opacity(0.8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity)
+                .background(TerminalColors.amber.opacity(0.08))
+            }
+
+            if sessionMonitor.instances.isEmpty {
+                emptyState
+            } else {
+                instancesList
+            }
         }
     }
 
@@ -25,13 +43,23 @@ struct ClaudeInstancesView: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Text("No sessions")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
+            if connectionStatus.remoteReachability == .unreachable {
+                Text("Remote machine offline")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
 
-            Text("Run claude in terminal")
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.25))
+                Text("Sessions will appear when it reconnects")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.25))
+            } else {
+                Text("No sessions")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+
+                Text("Run claude in terminal")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.25))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

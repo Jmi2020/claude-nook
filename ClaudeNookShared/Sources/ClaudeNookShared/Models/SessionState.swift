@@ -8,6 +8,12 @@
 
 import Foundation
 
+/// Whether a session originated from a local or remote connection
+public enum SessionOrigin: String, Codable, Sendable, Equatable {
+    case local   // Received via Unix socket
+    case remote  // Received via TCP
+}
+
 /// Complete state for a single Claude session
 /// This is the single source of truth - all state reads and writes go through SessionStore
 public struct SessionState: Equatable, Identifiable, Sendable, Codable {
@@ -22,6 +28,7 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
     public var pid: Int?
     public var tty: String?
     public var isInTmux: Bool
+    public var origin: SessionOrigin
 
     // MARK: - State Machine
 
@@ -71,6 +78,7 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
         pid: Int? = nil,
         tty: String? = nil,
         isInTmux: Bool = false,
+        origin: SessionOrigin = .local,
         phase: SessionPhase = .idle,
         chatItems: [ChatHistoryItem] = [],
         toolTracker: ToolTracker = ToolTracker(),
@@ -89,6 +97,7 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
         self.pid = pid
         self.tty = tty
         self.isInTmux = isInTmux
+        self.origin = origin
         self.phase = phase
         self.chatItems = chatItems
         self.toolTracker = toolTracker

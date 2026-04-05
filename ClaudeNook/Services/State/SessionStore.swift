@@ -30,6 +30,10 @@ actor SessionStore {
     /// Sync debounce interval (100ms)
     private let syncDebounceNs: UInt64 = 100_000_000
 
+    /// Cached permission decisions for replay if remote reconnects
+    /// Key: toolUseId, Value: (decision, reason, timestamp)
+    private var cachedDecisions: [String: (decision: String, reason: String?, cachedAt: Date)] = [:]
+
     /// Stale session cleanup timer
     private var cleanupTask: Task<Void, Never>?
 
@@ -114,6 +118,10 @@ actor SessionStore {
             }
         }
 
+        // Clean up expired cached decisions (>5 minutes old)
+        let decisionCutoff = Date().addingTimeInterval(-300)
+        cachedDecisions = cachedDecisions.filter { $0.value.cachedAt > decisionCutoff }
+
         if removedCount > 0 {
             publishState()
         }
@@ -126,8 +134,8 @@ actor SessionStore {
         Self.logger.debug("Processing: \(String(describing: event), privacy: .public)")
 
         switch event {
-        case .hookReceived(let hookEvent):
-            await processHookEvent(hookEvent)
+        case .hookReceived(let hookEvent, let origin):
+            await processHookEvent(hookEvent, origin: origin)
 
         case .permissionApproved(let sessionId, let toolUseId):
             await processPermissionApproved(sessionId: sessionId, toolUseId: toolUseId)
@@ -190,10 +198,15 @@ actor SessionStore {
 
     // MARK: - Hook Event Processing
 
-    private func processHookEvent(_ event: HookEvent) async {
+    private func processHookEvent(_ event: HookEvent, origin: SessionOrigin = .local) async {
         let sessionId = event.sessionId
         let isNewSession = sessions[sessionId] == nil
-        var session = sessions[sessionId] ?? createSession(from: event)
+        var session = sessions[sessionId] ?? createSession(from: event, origin: origin)
+
+        // Update origin if session was first seen locally but now arrives via remote
+        if session.origin == .local && origin == .remote {
+            session.origin = .remote
+        }
 
         session.pid = event.pid
         if let pid = event.pid {
@@ -221,6 +234,22 @@ actor SessionStore {
         }
 
         if event.event == "PermissionRequest", let toolUseId = event.toolUseId {
+            // Check for cached decision (replay if remote reconnected after failure)
+            if let cached = cachedDecisions.removeValue(forKey: toolUseId) {
+                let age = Date().timeIntervalSince(cached.cachedAt)
+                if age < 300 { // 5-minute expiry
+                    Self.logger.info("Replaying cached \(cached.decision) decision for \(toolUseId.prefix(12), privacy: .public) (age: \(Int(age))s)")
+                    HookSocketServer.shared.respondToPermission(
+                        toolUseId: toolUseId,
+                        decision: cached.decision,
+                        reason: cached.reason
+                    )
+                    sessions[sessionId] = session
+                    return
+                }
+                Self.logger.debug("Expired cached decision for \(toolUseId.prefix(12), privacy: .public) (age: \(Int(age))s)")
+            }
+
             Self.logger.debug("Setting tool \(toolUseId.prefix(12), privacy: .public) status to waitingForApproval")
             updateToolStatus(in: &session, toolId: toolUseId, status: .waitingForApproval)
 
@@ -243,7 +272,7 @@ actor SessionStore {
         }
     }
 
-    private func createSession(from event: HookEvent) -> SessionState {
+    private func createSession(from event: HookEvent, origin: SessionOrigin = .local) -> SessionState {
         SessionState(
             sessionId: event.sessionId,
             cwd: event.cwd,
@@ -251,6 +280,7 @@ actor SessionStore {
             pid: event.pid,
             tty: event.tty?.replacingOccurrences(of: "/dev/", with: ""),
             isInTmux: false,  // Will be updated
+            origin: origin,
             phase: .idle
         )
     }
@@ -391,6 +421,9 @@ actor SessionStore {
     // MARK: - Permission Processing
 
     private func processPermissionApproved(sessionId: String, toolUseId: String) async {
+        // Cache the decision for replay if the socket write fails
+        cachedDecisions[toolUseId] = (decision: "allow", reason: nil, cachedAt: Date())
+
         guard var session = sessions[sessionId] else { return }
 
         // Update tool status in chat history first
@@ -493,6 +526,9 @@ actor SessionStore {
     }
 
     private func processPermissionDenied(sessionId: String, toolUseId: String, reason: String?) async {
+        // Cache the decision for replay if the socket write fails
+        cachedDecisions[toolUseId] = (decision: "deny", reason: reason, cachedAt: Date())
+
         guard var session = sessions[sessionId] else { return }
 
         // Update tool status in chat history first
