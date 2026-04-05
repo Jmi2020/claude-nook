@@ -6,6 +6,15 @@
 .config/claude-nook/
 **/.claude-nook-token
 
+# Claude Code local settings
+.claude/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+.env/
+
 # macOS system files
 .DS_Store
 .AppleDouble
@@ -48,6 +57,7 @@ Podfile.lock
 Package.resolved
 Packages/
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+**/.swiftpm/xcode/xcuserdata/
 
 # Fastlane (if used)
 fastlane/report.xml
