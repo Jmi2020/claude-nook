@@ -169,20 +169,18 @@ class ConnectionViewModel: ObservableObject {
 
     /// Approve a permission request
     func approve(sessionId: String, toolUseId: String) {
-        print("[iOS] ConnectionVM.approve: sessionId=\(sessionId.prefix(8))..., toolUseId=\(toolUseId.prefix(12))..., connected=\(isConnected)")
+        logger.debug("Approving: session=\(sessionId.prefix(8)), tool=\(toolUseId.prefix(12)), connected=\(self.isConnected)")
 
         guard nookClient != nil else {
-            print("[iOS] ConnectionVM.approve: ERROR - nookClient is nil!")
+            logger.error("Cannot approve - nookClient is nil")
             return
         }
 
         Task {
             do {
                 try await nookClient?.send(.approve(sessionId: sessionId, toolUseId: toolUseId))
-                print("[iOS] ConnectionVM.approve: sent successfully")
                 logger.info("Approved \(toolUseId) for session \(sessionId)")
             } catch {
-                print("[iOS] ConnectionVM.approve: ERROR - \(error)")
                 logger.error("Failed to approve: \(error)")
             }
         }
@@ -190,20 +188,18 @@ class ConnectionViewModel: ObservableObject {
 
     /// Deny a permission request
     func deny(sessionId: String, toolUseId: String, reason: String?) {
-        print("[iOS] ConnectionVM.deny: sessionId=\(sessionId.prefix(8))..., toolUseId=\(toolUseId.prefix(12))...")
+        logger.debug("Denying: session=\(sessionId.prefix(8)), tool=\(toolUseId.prefix(12))")
 
         guard nookClient != nil else {
-            print("[iOS] ConnectionVM.deny: ERROR - nookClient is nil!")
+            logger.error("Cannot deny - nookClient is nil")
             return
         }
 
         Task {
             do {
                 try await nookClient?.send(.deny(sessionId: sessionId, toolUseId: toolUseId, reason: reason))
-                print("[iOS] ConnectionVM.deny: sent successfully")
                 logger.info("Denied \(toolUseId) for session \(sessionId)")
             } catch {
-                print("[iOS] ConnectionVM.deny: ERROR - \(error)")
                 logger.error("Failed to deny: \(error)")
             }
         }

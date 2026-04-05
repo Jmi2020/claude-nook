@@ -125,60 +125,6 @@ struct ToolCompletionResult: Sendable {
     }
 }
 
-// MARK: - Hook Event Extensions
-
-extension HookEvent {
-    /// Determine the target session phase based on this hook event
-    nonisolated func determinePhase() -> SessionPhase {
-        // PreCompact takes priority
-        if event == "PreCompact" {
-            return .compacting
-        }
-
-        // Permission request creates waitingForApproval state
-        if expectsResponse, let tool = tool {
-            return .waitingForApproval(PermissionContext(
-                toolUseId: toolUseId ?? "",
-                toolName: tool,
-                toolInput: toolInput,
-                receivedAt: Date()
-            ))
-        }
-
-        if event == "Notification" && notificationType == "idle_prompt" {
-            return .idle
-        }
-
-        switch status {
-        case "waiting_for_input":
-            return .waitingForInput
-        case "running_tool", "processing", "starting":
-            return .processing
-        case "compacting":
-            return .compacting
-        case "ended":
-            return .ended
-        default:
-            return .idle
-        }
-    }
-
-    /// Whether this is a tool-related event
-    nonisolated var isToolEvent: Bool {
-        event == "PreToolUse" || event == "PostToolUse" || event == "PermissionRequest"
-    }
-
-    /// Whether this event should trigger a file sync
-    nonisolated var shouldSyncFile: Bool {
-        switch event {
-        case "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop":
-            return true
-        default:
-            return false
-        }
-    }
-}
-
 // MARK: - Debug Description
 
 extension SessionEvent: CustomStringConvertible {
