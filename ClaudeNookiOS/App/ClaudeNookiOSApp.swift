@@ -18,18 +18,16 @@ struct ClaudeNookiOSApp: App {
 
     private let backgroundTaskManager = BackgroundTaskManager()
 
-    init() {
-        // Must set delegate before any notifications can be received
-        UNUserNotificationCenter.current().delegate = NotificationManager.shared
-        NotificationManager.shared.registerCategories()
-    }
-
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(connectionVM)
                 .environmentObject(sessionStore)
                 .task {
+                    // Set notification delegate on main thread (safe here, not in init)
+                    UNUserNotificationCenter.current().delegate = NotificationManager.shared
+                    NotificationManager.shared.registerCategories()
+
                     // Connect the session store to the view model
                     connectionVM.setSessionStore(sessionStore)
 
@@ -52,11 +50,9 @@ struct ClaudeNookiOSApp: App {
                     switch newPhase {
                     case .active:
                         NotificationManager.shared.isInForeground = true
-                        // Reconnect if needed when returning to foreground
                         if !connectionVM.isConnected {
                             connectionVM.reconnectToLastHost()
                         }
-                        // Clear delivered notifications
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                     case .background:
                         NotificationManager.shared.isInForeground = false

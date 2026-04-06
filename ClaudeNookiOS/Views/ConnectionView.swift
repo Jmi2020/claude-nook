@@ -423,6 +423,15 @@ struct ManualConnectionSheet: View {
     @State private var port = "4851"
     @State private var token = ""
 
+    /// Whether the entered host looks like a Tailscale IP (100.64-127.x.x)
+    private var isTailscaleIP: Bool {
+        let parts = host.split(separator: ".")
+        guard parts.count == 4,
+              let first = Int(parts[0]),
+              let second = Int(parts[1]) else { return false }
+        return first == 100 && second >= 64 && second <= 127
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -449,7 +458,11 @@ struct ManualConnectionSheet: View {
                     } header: {
                         Text("Authentication")
                     } footer: {
-                        Text("64-character token from Claude Nook on your Mac")
+                        if isTailscaleIP {
+                            Text("Tailscale IP detected — token may not be required if auto-trust is enabled on your Mac")
+                        } else {
+                            Text("64-character token from Claude Nook on your Mac")
+                        }
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -472,8 +485,8 @@ struct ManualConnectionSheet: View {
                         )
                         dismiss()
                     }
-                    .disabled(host.isEmpty || token.isEmpty)
-                    .foregroundColor(host.isEmpty || token.isEmpty ? .secondary : Color.nookAccent)
+                    .disabled(host.isEmpty || (token.isEmpty && !isTailscaleIP))
+                    .foregroundColor(host.isEmpty || (token.isEmpty && !isTailscaleIP) ? .secondary : Color.nookAccent)
                 }
             }
             .toolbarBackground(Color.nookBackground, for: .navigationBar)
