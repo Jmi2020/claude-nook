@@ -39,9 +39,24 @@ class iOSSessionStore: ObservableObject {
 
         case .sessionUpdate(let update):
             logger.info("Received session update for \(update.session.sessionId)")
-            // Replace or add the session
+            // Replace or add the session, preserving chat items from incremental updates
             if let index = sessions.firstIndex(where: { $0.sessionId == update.session.sessionId }) {
-                sessions[index] = update.session
+                var updated = update.session
+                // Incremental updates don't include chatItems — preserve existing ones
+                if updated.chatItems.isEmpty && !sessions[index].chatItems.isEmpty {
+                    updated = SessionStateLight(
+                        sessionId: updated.sessionId,
+                        projectName: updated.projectName,
+                        phase: updated.phase,
+                        lastActivity: updated.lastActivity,
+                        createdAt: updated.createdAt,
+                        displayTitle: updated.displayTitle,
+                        pendingToolName: updated.pendingToolName,
+                        pendingToolInput: updated.pendingToolInput,
+                        chatItems: sessions[index].chatItems
+                    )
+                }
+                sessions[index] = updated
             } else {
                 sessions.append(update.session)
             }
@@ -113,7 +128,8 @@ class iOSSessionStore: ObservableObject {
             createdAt: session.createdAt,
             displayTitle: session.displayTitle,
             pendingToolName: nil,  // Clear pending tool when phase changes
-            pendingToolInput: nil
+            pendingToolInput: nil,
+            chatItems: session.chatItems  // Preserve existing chat history
         )
         sessions[index] = updatedSession
         logger.info("Updated session \(sessionId.prefix(8)) phase to \(newPhase)")

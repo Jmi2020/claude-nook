@@ -166,8 +166,8 @@ class HookSocketServer {
             iOSConnectionManager.shared.broadcast(.permissionResolved(sessionId: sessionId, toolUseId: toolUseId))
 
         case .pong:
-            // Heartbeat response, client is alive
-            break
+            // Heartbeat response confirms remote is alive
+            recordRemoteActivity()
 
         case .disconnect:
             // Client disconnected, already handled by iOSConnectionManager
@@ -752,6 +752,7 @@ class HookSocketServer {
     /// Handle iOS client that sent SUBSCRIBE command
     private func handleSubscribeClient(_ clientSocket: Int32, address: String) {
         logger.info("iOS: SUBSCRIBE from \(address, privacy: .public)")
+        recordRemoteActivity()
 
         // Add to iOS connection manager (this keeps the socket open)
         let clientId = iOSConnectionManager.shared.addClient(socket: clientSocket, address: address)
@@ -772,7 +773,7 @@ class HookSocketServer {
         }
 
         let sessions = await provider()
-        let lightSessions = sessions.map { SessionStateLight(from: $0) }
+        let lightSessions = sessions.map { SessionStateLight(from: $0, includeChatItems: true) }
         let snapshot = StateSnapshot(sessions: lightSessions)
         iOSConnectionManager.shared.send(.state(snapshot), to: clientId)
 

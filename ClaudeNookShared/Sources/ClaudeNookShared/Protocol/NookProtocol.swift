@@ -222,7 +222,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         self.chatItems = chatItems
     }
 
-    /// Create from full SessionState
+    /// Create from full SessionState (lightweight — no chat items for incremental updates)
     public init(from session: SessionState) {
         self.sessionId = session.sessionId
         self.projectName = session.projectName
@@ -232,7 +232,20 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         self.displayTitle = session.displayTitle
         self.pendingToolName = session.pendingToolName
         self.pendingToolInput = session.pendingToolInput
-        self.chatItems = session.chatItems
+        self.chatItems = []
+    }
+
+    /// Create from full SessionState with chat history (for initial snapshots)
+    public init(from session: SessionState, includeChatItems: Bool) {
+        self.sessionId = session.sessionId
+        self.projectName = session.projectName
+        self.phase = session.phase
+        self.lastActivity = session.lastActivity
+        self.createdAt = session.createdAt
+        self.displayTitle = session.displayTitle
+        self.pendingToolName = session.pendingToolName
+        self.pendingToolInput = session.pendingToolInput
+        self.chatItems = includeChatItems ? session.chatItems : []
     }
 }
 
