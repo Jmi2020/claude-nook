@@ -78,9 +78,6 @@ struct SessionListView: View {
             }
             .navigationTitle("Sessions")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: SessionStateLight.self) { session in
-                SessionDetailView(session: session)
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     ConnectionStatusIndicator()
@@ -103,8 +100,20 @@ struct SessionListView: View {
             }
             .sheet(item: $selectedSession) { session in
                 NavigationStack {
-                    SessionDetailView(session: session)
+                    ChatView(session: session)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") {
+                                    selectedSession = nil
+                                }
+                                .foregroundStyle(.white.opacity(0.7))
+                            }
+                        }
+                        .toolbarBackground(Color.nookBackground, for: .navigationBar)
+                        .toolbarBackground(.visible, for: .navigationBar)
+                        .toolbarColorScheme(.dark, for: .navigationBar)
                 }
+                .preferredColorScheme(.dark)
             }
             .refreshable {
                 await sessionStore.refresh()
@@ -118,10 +127,8 @@ struct SessionListView: View {
 
     private func approveSession(_ session: SessionStateLight) {
         guard case .waitingForApproval(let context) = session.phase else {
-            print("[iOS] approveSession: phase is not waitingForApproval, it's \(session.phase)")
             return
         }
-        print("[iOS] approveSession: approving \(context.toolName) (toolUseId: \(context.toolUseId.prefix(12))...)")
 
         // Immediately update the local session to show feedback
         sessionStore.updateSessionPhase(sessionId: session.sessionId, to: .processing)
@@ -131,10 +138,8 @@ struct SessionListView: View {
 
     private func denySession(_ session: SessionStateLight) {
         guard case .waitingForApproval(let context) = session.phase else {
-            print("[iOS] denySession: phase is not waitingForApproval, it's \(session.phase)")
             return
         }
-        print("[iOS] denySession: denying \(context.toolName) (toolUseId: \(context.toolUseId.prefix(12))...)")
 
         // Immediately update the local session to show feedback
         sessionStore.updateSessionPhase(sessionId: session.sessionId, to: .processing)

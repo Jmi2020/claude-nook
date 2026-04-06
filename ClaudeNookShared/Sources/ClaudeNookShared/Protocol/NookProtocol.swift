@@ -182,7 +182,7 @@ public struct StateSnapshot: Codable, Sendable {
 }
 
 /// Lightweight session state for iOS (without full chat history)
-public struct SessionStateLight: Identifiable, Codable, Sendable, Hashable {
+public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
     public let sessionId: String
     public let projectName: String
     public let phase: SessionPhase
@@ -191,6 +191,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Hashable {
     public let displayTitle: String
     public let pendingToolName: String?
     public let pendingToolInput: String?
+    public let chatItems: [ChatHistoryItem]
 
     public var id: String { sessionId }
 
@@ -207,7 +208,8 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Hashable {
         createdAt: Date,
         displayTitle: String,
         pendingToolName: String?,
-        pendingToolInput: String?
+        pendingToolInput: String?,
+        chatItems: [ChatHistoryItem] = []
     ) {
         self.sessionId = sessionId
         self.projectName = projectName
@@ -217,6 +219,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Hashable {
         self.displayTitle = displayTitle
         self.pendingToolName = pendingToolName
         self.pendingToolInput = pendingToolInput
+        self.chatItems = chatItems
     }
 
     /// Create from full SessionState
@@ -229,6 +232,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Hashable {
         self.displayTitle = session.displayTitle
         self.pendingToolName = session.pendingToolName
         self.pendingToolInput = session.pendingToolInput
+        self.chatItems = session.chatItems
     }
 }
 
