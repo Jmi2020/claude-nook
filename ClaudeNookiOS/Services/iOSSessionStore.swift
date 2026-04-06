@@ -49,12 +49,14 @@ class iOSSessionStore: ObservableObject {
         case .permissionRequest(let request):
             logger.info("Received permission request for \(request.toolName)")
             pendingPermission = request
+            NotificationManager.shared.schedulePermissionNotification(for: request)
 
         case .permissionResolved(let sessionId, let toolUseId):
             logger.info("Permission resolved for \(toolUseId) in session \(sessionId)")
             if pendingPermission?.toolUseId == toolUseId {
                 pendingPermission = nil
             }
+            NotificationManager.shared.removePermissionNotification(toolUseId: toolUseId)
 
         case .sessionRemoved(let sessionId):
             logger.info("Session removed: \(sessionId)")

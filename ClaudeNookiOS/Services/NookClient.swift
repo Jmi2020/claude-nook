@@ -15,6 +15,7 @@ actor NookClient {
     private var connection: NWConnection?
     private var messageHandler: (@Sendable (ServerMessage) -> Void)?
     private var connectionHandler: (@Sendable (Bool) -> Void)?
+    private var disconnectHandler: (@Sendable () -> Void)?
     private var buffer = Data()
 
     private let queue = DispatchQueue(label: "com.jmi2020.claudenook-ios.client")
@@ -33,8 +34,22 @@ actor NookClient {
             port: NWEndpoint.Port(integerLiteral: UInt16(port))
         )
 
-        let connection = NWConnection(to: endpoint, using: .tcp)
+        // Custom parameters for background viability
+        let parameters = NWParameters.tcp
+        parameters.prohibitExpensivePaths = false
+        parameters.prohibitConstrainedPaths = false
+
+        let connection = NWConnection(to: endpoint, using: parameters)
         self.connection = connection
+
+        // Monitor connection viability for background resilience
+        connection.viabilityUpdateHandler = { [weak self] isViable in
+            Task {
+                if !isViable {
+                    await self?.handleViabilityLost()
+                }
+            }
+        }
 
         return try await withCheckedThrowingContinuation { [weak self] (continuation: CheckedContinuation<Void, Error>) in
             connection.stateUpdateHandler = { state in
@@ -43,8 +58,21 @@ actor NookClient {
                 }
             }
 
-            connection.start(queue: queue)
+            connection.start(queue: self?.queue ?? .global())
         }
+    }
+
+    private func handleViabilityLost() {
+        logger.warning("Connection viability lost")
+        disconnect()
+        if let handler = disconnectHandler {
+            handler()
+        }
+    }
+
+    /// Set the handler for unexpected disconnections (for background reconnect)
+    func setDisconnectHandler(_ handler: @escaping @Sendable () -> Void) {
+        disconnectHandler = handler
     }
 
     private func handleConnectionState(
@@ -171,7 +199,9 @@ actor NookClient {
 
         if isComplete {
             logger.info("Connection closed by server")
+            let handler = disconnectHandler
             disconnect()
+            handler?()
         } else {
             startReceiving()
         }

@@ -417,6 +417,7 @@
 				DEVELOPMENT_TEAM = HK6CB8L97H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "fetch processing";
 				INFOPLIST_KEY_CFBundleDisplayName = "Claude Nook";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Claude Nook uses Bluetooth to automatically discover and pair with your Mac for session monitoring.";
@@ -455,6 +456,7 @@
 				DEVELOPMENT_TEAM = HK6CB8L97H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "fetch processing";
 				INFOPLIST_KEY_CFBundleDisplayName = "Claude Nook";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Claude Nook uses Bluetooth to automatically discover and pair with your Mac for session monitoring.";
