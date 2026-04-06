@@ -423,13 +423,18 @@ struct ManualConnectionSheet: View {
     @State private var port = "4851"
     @State private var token = ""
 
-    /// Whether the entered host looks like a Tailscale IP (100.64-127.x.x)
+    /// Whether the entered host looks like a Tailscale/VPN IP
+    /// Covers default Tailscale CGNAT (100.64-127.x.x) and custom ranges (10.x.x.x)
     private var isTailscaleIP: Bool {
         let parts = host.split(separator: ".")
         guard parts.count == 4,
               let first = Int(parts[0]),
               let second = Int(parts[1]) else { return false }
-        return first == 100 && second >= 64 && second <= 127
+        // Default Tailscale range (100.64.0.0/10)
+        if first == 100 && second >= 64 && second <= 127 { return true }
+        // Custom Tailscale/Headscale ranges often use 10.x.x.x
+        if first == 10 { return true }
+        return false
     }
 
     var body: some View {

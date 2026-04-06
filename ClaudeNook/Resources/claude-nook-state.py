@@ -23,13 +23,17 @@ import sys
 
 
 def is_tailscale_ip(ip):
-    """Check if IP is in Tailscale's CGNAT range (100.64.0.0/10)"""
+    """Check if IP is a Tailscale/VPN IP (CGNAT 100.64/10 or custom 10/8)"""
     parts = ip.split(".")
     if len(parts) != 4:
         return False
     try:
         first, second = int(parts[0]), int(parts[1])
-        return first == 100 and 64 <= second <= 127
+        if first == 100 and 64 <= second <= 127:
+            return True
+        if first == 10:
+            return True
+        return False
     except ValueError:
         return False
 

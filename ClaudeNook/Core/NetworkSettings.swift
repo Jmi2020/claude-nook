@@ -60,17 +60,20 @@ struct TCPConfiguration: Codable, Equatable {
         return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Check if an IP address is a Tailscale IP (100.x.x.x CGNAT range)
+    /// Check if an IP address is a Tailscale/VPN IP
+    /// Covers default CGNAT range (100.64.0.0/10) and custom Tailscale/Headscale ranges (10.x.x.x)
     static func isTailscaleIP(_ address: String) -> Bool {
-        // Tailscale uses 100.64.0.0/10 (CGNAT range)
-        // This covers 100.64.0.0 - 100.127.255.255
         let parts = address.split(separator: ".")
         guard parts.count == 4,
               let first = Int(parts[0]),
               let second = Int(parts[1]) else {
             return false
         }
-        return first == 100 && second >= 64 && second <= 127
+        // Default Tailscale CGNAT range (100.64.0.0/10)
+        if first == 100 && second >= 64 && second <= 127 { return true }
+        // Custom Tailscale/Headscale ranges (10.0.0.0/8)
+        if first == 10 { return true }
+        return false
     }
 }
 
