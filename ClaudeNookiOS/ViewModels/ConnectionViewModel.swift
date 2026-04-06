@@ -83,7 +83,7 @@ class ConnectionViewModel: ObservableObject {
         Task {
             do {
                 await client.setConnectionHandler { [weak self] connected in
-                    Task { @MainActor in
+                    Task { @MainActor [weak self] in
                         self?.isConnected = connected
                         self?.isConnecting = false
 

@@ -98,8 +98,6 @@ class BonjourDiscovery: ObservableObject {
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>) {
-        var hosts: [DiscoveredHost] = []
-
         for result in results {
             switch result.endpoint {
             case .service(let name, let type, let domain, _):

@@ -51,14 +51,15 @@ actor NookClient {
             }
         }
 
+        let clientQueue = self.queue
         return try await withCheckedThrowingContinuation { [weak self] (continuation: CheckedContinuation<Void, Error>) in
-            connection.stateUpdateHandler = { state in
-                Task { [weak self] in
+            connection.stateUpdateHandler = { [weak self] state in
+                Task {
                     await self?.handleConnectionState(state, token: token, continuation: continuation)
                 }
             }
 
-            connection.start(queue: self?.queue ?? .global())
+            connection.start(queue: clientQueue)
         }
     }
 

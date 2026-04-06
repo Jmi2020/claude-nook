@@ -24,7 +24,7 @@ class iOSSessionStore: ObservableObject {
         nookClient = client
 
         await client.setMessageHandler { [weak self] message in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleMessage(message)
             }
         }
