@@ -18,13 +18,18 @@ struct ClaudeNookiOSApp: App {
 
     private let backgroundTaskManager = BackgroundTaskManager()
 
+    init() {
+        // BGTaskScheduler MUST be registered before app finishes launching
+        backgroundTaskManager.registerTasks()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(connectionVM)
                 .environmentObject(sessionStore)
                 .task {
-                    // Set notification delegate on main thread (safe here, not in init)
+                    // Set notification delegate (must be on main thread, safe in .task)
                     UNUserNotificationCenter.current().delegate = NotificationManager.shared
                     NotificationManager.shared.registerCategories()
 
@@ -37,7 +42,6 @@ struct ClaudeNookiOSApp: App {
 
                     // Wire up background task manager
                     backgroundTaskManager.connectionVM = connectionVM
-                    backgroundTaskManager.registerTasks()
                     backgroundTaskManager.scheduleReconnect()
 
                     // Request notification permission
