@@ -9,6 +9,9 @@
 # Claude Code local settings
 .claude/
 
+# Git worktrees
+.worktrees/
+
 # Python virtual environments
 .venv/
 venv/
