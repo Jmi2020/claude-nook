@@ -40,6 +40,7 @@ struct NotchMenuView: View {
             SoundPickerRow(soundSelector: soundSelector)
             IdleTimeoutPickerRow(selector: idleTimeoutSelector)
             NetworkSettingsRow(networkSettings: networkSettings)
+            AISettingsRow()
 
             HStack {
                 ConnectionStatusPill()

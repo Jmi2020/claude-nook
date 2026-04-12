@@ -55,6 +55,32 @@ struct SessionDetailView: View {
                     .background(Color.nookSurface)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
+                    // AI Classification (if available)
+                    if let classification = session.classification {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("AI Classification")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            HStack(spacing: 8) {
+                                CategoryChip(category: classification.category)
+                                ProgressBadge(progress: classification.progress)
+                            }
+
+                            Text(classification.summary)
+                                .font(.body)
+                                .foregroundStyle(.white)
+
+                            Text(classification.classifiedAt, style: .relative)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.nookSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
                     // Pending Tool (if any)
                     if let toolName = session.pendingToolName {
                         VStack(alignment: .leading, spacing: 8) {

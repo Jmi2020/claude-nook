@@ -191,6 +191,9 @@ actor SessionStore {
         case .agentFileUpdated:
             // No longer used - subagent tools are populated from JSONL completion
             break
+
+        case .classificationUpdated(let sessionId, let classification):
+            processClassificationUpdate(sessionId: sessionId, classification: classification)
         }
 
         publishState()
@@ -955,6 +958,14 @@ actor SessionStore {
         sessions.removeValue(forKey: sessionId)
         cancelPendingSync(sessionId: sessionId)
         broadcastSessionRemovedToiOS(sessionId)
+    }
+
+    // MARK: - AI Classification
+
+    private func processClassificationUpdate(sessionId: String, classification: SessionClassification) {
+        guard var session = sessions[sessionId] else { return }
+        session.classification = classification
+        sessions[sessionId] = session
     }
 
     // MARK: - History Loading

@@ -649,7 +649,7 @@ struct QRCodeSheet: View {
                 HStack {
                     Text("Host:")
                         .foregroundColor(.white.opacity(0.5))
-                    Text(getLocalIP() ?? "Unknown")
+                    Text(NetworkInterfaceResolver.bestAddress(preferTailscale: true) ?? "Unknown")
                         .foregroundColor(.white)
                 }
                 HStack {
@@ -670,7 +670,7 @@ struct QRCodeSheet: View {
     }
 
     private func generateQRCode() -> NSImage? {
-        guard let host = getLocalIP() else { return nil }
+        guard let host = NetworkInterfaceResolver.bestAddress(preferTailscale: true) else { return nil }
 
         // Create connection URL
         let urlString = "claudenook://connect?host=\(host)&port=\(networkSettings.configuration.port)&token=\(networkSettings.currentToken)"
@@ -694,40 +694,4 @@ struct QRCodeSheet: View {
         return NSImage(cgImage: cgImage, size: NSSize(width: 200, height: 200))
     }
 
-    private func getLocalIP() -> String? {
-        var address: String?
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-
-        guard getifaddrs(&ifaddr) == 0 else { return nil }
-        defer { freeifaddrs(ifaddr) }
-
-        var ptr = ifaddr
-        while ptr != nil {
-            defer { ptr = ptr?.pointee.ifa_next }
-
-            guard let interface = ptr?.pointee else { continue }
-
-            let addrFamily = interface.ifa_addr.pointee.sa_family
-            guard addrFamily == UInt8(AF_INET) else { continue }
-
-            let name = String(cString: interface.ifa_name)
-            // Look for en0 (WiFi) or en1 (Ethernet)
-            guard name == "en0" || name == "en1" else { continue }
-
-            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            getnameinfo(
-                interface.ifa_addr,
-                socklen_t(interface.ifa_addr.pointee.sa_len),
-                &hostname,
-                socklen_t(hostname.count),
-                nil,
-                0,
-                NI_NUMERICHOST
-            )
-            address = String(cString: hostname)
-            break
-        }
-
-        return address
-    }
 }

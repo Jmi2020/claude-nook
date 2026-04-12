@@ -77,11 +77,17 @@ struct SessionRow: View {
                 }
             }
         } else {
-            // Show project name / last message
-            Text(session.projectName)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.4))
-                .lineLimit(1)
+            // Show category chip (if classified) + project name
+            HStack(spacing: 6) {
+                if let classification = session.classification,
+                   classification.category != .other {
+                    CategoryChip(category: classification.category)
+                }
+                Text(session.projectName)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.4))
+                    .lineLimit(1)
+            }
         }
     }
 }

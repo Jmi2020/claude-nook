@@ -100,10 +100,86 @@ enum AppSettings {
             NotificationCenter.default.post(name: .idleTimeoutChanged, object: nil)
         }
     }
+    // MARK: - AI Classification
+
+    /// Whether AI session classification is enabled
+    static var aiClassificationEnabled: Bool {
+        get { defaults.bool(forKey: "aiClassificationEnabled") }
+        set {
+            defaults.set(newValue, forKey: "aiClassificationEnabled")
+            NotificationCenter.default.post(name: .aiSettingsChanged, object: nil)
+        }
+    }
+
+    /// LLM backend type: "ollama" or "lmstudio"
+    static var aiBackendType: String {
+        get { defaults.string(forKey: "aiBackendType") ?? "ollama" }
+        set {
+            defaults.set(newValue, forKey: "aiBackendType")
+            NotificationCenter.default.post(name: .aiSettingsChanged, object: nil)
+        }
+    }
+
+    /// Model name to use for classification
+    static var aiModelName: String {
+        get { defaults.string(forKey: "aiModelName") ?? "gemma4:e4b" }
+        set {
+            defaults.set(newValue, forKey: "aiModelName")
+            NotificationCenter.default.post(name: .aiSettingsChanged, object: nil)
+        }
+    }
+
+    /// Classification interval in seconds
+    static var aiClassificationInterval: Int {
+        get {
+            let value = defaults.integer(forKey: "aiClassificationInterval")
+            return value > 0 ? value : 30
+        }
+        set {
+            defaults.set(newValue, forKey: "aiClassificationInterval")
+            NotificationCenter.default.post(name: .aiSettingsChanged, object: nil)
+        }
+    }
+}
+
+/// Available AI classification intervals
+enum ClassificationInterval: Int, CaseIterable {
+    case fifteenSeconds = 15
+    case thirtySeconds = 30
+    case sixtySeconds = 60
+
+    var displayName: String {
+        switch self {
+        case .fifteenSeconds: return "15 seconds"
+        case .thirtySeconds: return "30 seconds"
+        case .sixtySeconds: return "60 seconds"
+        }
+    }
+}
+
+/// Available LLM backend types
+enum AIBackendType: String, CaseIterable {
+    case ollama = "ollama"
+    case lmstudio = "lmstudio"
+
+    var displayName: String {
+        switch self {
+        case .ollama: return "Ollama"
+        case .lmstudio: return "LM Studio"
+        }
+    }
+
+    var defaultEndpoint: String {
+        switch self {
+        case .ollama: return "http://localhost:11434"
+        case .lmstudio: return "http://localhost:1234"
+        }
+    }
 }
 
 // MARK: - Notification Names
 
 extension Notification.Name {
     static let idleTimeoutChanged = Notification.Name("idleTimeoutChanged")
+    static let aiSettingsChanged = Notification.Name("aiSettingsChanged")
 }

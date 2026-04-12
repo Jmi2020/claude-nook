@@ -192,6 +192,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
     public let pendingToolName: String?
     public let pendingToolInput: String?
     public let chatItems: [ChatHistoryItem]
+    public let classification: SessionClassification?
 
     public var id: String { sessionId }
 
@@ -209,7 +210,8 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         displayTitle: String,
         pendingToolName: String?,
         pendingToolInput: String?,
-        chatItems: [ChatHistoryItem] = []
+        chatItems: [ChatHistoryItem] = [],
+        classification: SessionClassification? = nil
     ) {
         self.sessionId = sessionId
         self.projectName = projectName
@@ -220,6 +222,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         self.pendingToolName = pendingToolName
         self.pendingToolInput = pendingToolInput
         self.chatItems = chatItems
+        self.classification = classification
     }
 
     /// Create from full SessionState (lightweight — no chat items for incremental updates)
@@ -233,6 +236,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         self.pendingToolName = session.pendingToolName
         self.pendingToolInput = session.pendingToolInput
         self.chatItems = []
+        self.classification = session.classification
     }
 
     /// Create from full SessionState with chat history (for initial snapshots)
@@ -246,6 +250,7 @@ public struct SessionStateLight: Identifiable, Codable, Sendable, Equatable {
         self.pendingToolName = session.pendingToolName
         self.pendingToolInput = session.pendingToolInput
         self.chatItems = includeChatItems ? session.chatItems : []
+        self.classification = session.classification
     }
 }
 

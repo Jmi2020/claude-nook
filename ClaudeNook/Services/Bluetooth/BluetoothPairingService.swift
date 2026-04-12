@@ -170,7 +170,7 @@ class BluetoothPairingService: NSObject, ObservableObject {
 
     /// Get connection info as JSON Data
     private func getConnectionInfoData() -> Data? {
-        guard let host = getLocalIP() else { return nil }
+        guard let host = NetworkInterfaceResolver.bestAddress(preferTailscale: true) else { return nil }
         let port = NetworkSettings.shared.configuration.port
 
         let info: [String: Any] = [
@@ -181,41 +181,6 @@ class BluetoothPairingService: NSObject, ObservableObject {
         return try? JSONSerialization.data(withJSONObject: info)
     }
 
-    private func getLocalIP() -> String? {
-        var address: String?
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-
-        guard getifaddrs(&ifaddr) == 0 else { return nil }
-        defer { freeifaddrs(ifaddr) }
-
-        var ptr = ifaddr
-        while ptr != nil {
-            defer { ptr = ptr?.pointee.ifa_next }
-
-            guard let interface = ptr?.pointee else { continue }
-
-            let addrFamily = interface.ifa_addr.pointee.sa_family
-            guard addrFamily == UInt8(AF_INET) else { continue }
-
-            let name = String(cString: interface.ifa_name)
-            guard name == "en0" || name == "en1" else { continue }
-
-            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            getnameinfo(
-                interface.ifa_addr,
-                socklen_t(interface.ifa_addr.pointee.sa_len),
-                &hostname,
-                socklen_t(hostname.count),
-                nil,
-                0,
-                NI_NUMERICHOST
-            )
-            address = String(cString: hostname)
-            break
-        }
-
-        return address
-    }
 }
 
 // MARK: - CBPeripheralManagerDelegate

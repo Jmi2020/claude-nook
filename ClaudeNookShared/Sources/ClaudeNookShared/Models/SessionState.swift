@@ -54,6 +54,11 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
 
     public var conversationInfo: ConversationInfo
 
+    // MARK: - AI Classification
+
+    /// AI-generated classification of session activity (from local LLM)
+    public var classification: SessionClassification?
+
     // MARK: - Clear Reconciliation
 
     /// When true, the next file update should reconcile chatItems with parser state
@@ -87,6 +92,7 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
             summary: nil, lastMessage: nil, lastMessageRole: nil,
             lastToolName: nil, firstUserMessage: nil, lastUserMessageDate: nil
         ),
+        classification: SessionClassification? = nil,
         needsClearReconciliation: Bool = false,
         lastActivity: Date = Date(),
         createdAt: Date = Date()
@@ -103,6 +109,7 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
         self.toolTracker = toolTracker
         self.subagentState = subagentState
         self.conversationInfo = conversationInfo
+        self.classification = classification
         self.needsClearReconciliation = needsClearReconciliation
         self.lastActivity = lastActivity
         self.createdAt = createdAt
@@ -133,9 +140,9 @@ public struct SessionState: Equatable, Identifiable, Sendable, Codable {
         return sessionId
     }
 
-    /// Display title: summary > first user message > project name
+    /// Display title: AI classification > summary > first user message > project name
     public var displayTitle: String {
-        conversationInfo.summary ?? conversationInfo.firstUserMessage ?? projectName
+        classification?.summary ?? conversationInfo.summary ?? conversationInfo.firstUserMessage ?? projectName
     }
 
     /// Best hint for matching window title

@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var screenObserver: ScreenObserver?
     private var updateCheckTimer: Timer?
     private var statusBarController: StatusBarController?
+    private var aiSettingsObserver: NSObjectProtocol?
 
     static var shared: AppDelegate?
     let updater: SPUUpdater
@@ -60,6 +61,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let updater = self?.updater, updater.canCheckForUpdates else { return }
             updater.checkForUpdates()
         }
+
+        // Start AI classification if enabled
+        startClassifierIfNeeded()
+
+        // Listen for AI settings changes
+        aiSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .aiSettingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.startClassifierIfNeeded()
+        }
     }
 
     private func handleScreenChange() {
@@ -69,6 +82,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         updateCheckTimer?.invalidate()
         screenObserver = nil
+        if let observer = aiSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        Task { await SessionClassifier.shared.stop() }
+    }
+
+    private func startClassifierIfNeeded() {
+        Task {
+            if AppSettings.aiClassificationEnabled {
+                let backendType = AIBackendType(rawValue: AppSettings.aiBackendType) ?? .ollama
+                let model = AppSettings.aiModelName
+                let backend: any LLMBackend = switch backendType {
+                case .ollama:
+                    OllamaBackend(model: model)
+                case .lmstudio:
+                    LMStudioBackend(model: model)
+                }
+                await SessionClassifier.shared.start(
+                    backend: backend,
+                    intervalSeconds: UInt64(AppSettings.aiClassificationInterval)
+                )
+            } else {
+                await SessionClassifier.shared.stop()
+            }
+        }
     }
 
     private func ensureSingleInstance() -> Bool {

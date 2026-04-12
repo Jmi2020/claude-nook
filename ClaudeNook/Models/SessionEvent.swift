@@ -66,6 +66,11 @@ enum SessionEvent: Sendable {
     /// User issued /clear command - reset UI state while keeping session alive
     case clearDetected(sessionId: String)
 
+    // MARK: - AI Classification
+
+    /// AI classification was updated for a session
+    case classificationUpdated(sessionId: String, classification: SessionClassification)
+
     // MARK: - Session Lifecycle
 
     /// Session has ended
@@ -144,6 +149,8 @@ extension SessionEvent: CustomStringConvertible {
             return "interruptDetected(session: \(sessionId.prefix(8)))"
         case .clearDetected(let sessionId):
             return "clearDetected(session: \(sessionId.prefix(8)))"
+        case .classificationUpdated(let sessionId, let classification):
+            return "classificationUpdated(session: \(sessionId.prefix(8)), category: \(classification.category))"
         case .sessionEnded(let sessionId):
             return "sessionEnded(session: \(sessionId.prefix(8)))"
         case .loadHistory(let sessionId, _):

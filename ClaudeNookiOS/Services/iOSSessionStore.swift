@@ -39,11 +39,14 @@ class iOSSessionStore: ObservableObject {
 
         case .sessionUpdate(let update):
             logger.info("Received session update for \(update.session.sessionId)")
-            // Replace or add the session, preserving chat items from incremental updates
+            // Replace or add the session, preserving chat items and classification from incremental updates
             if let index = sessions.firstIndex(where: { $0.sessionId == update.session.sessionId }) {
                 var updated = update.session
-                // Incremental updates don't include chatItems — preserve existing ones
-                if updated.chatItems.isEmpty && !sessions[index].chatItems.isEmpty {
+                let existing = sessions[index]
+                // Incremental updates may not include chatItems or classification — preserve existing
+                let chatItems = updated.chatItems.isEmpty ? existing.chatItems : updated.chatItems
+                let classification = updated.classification ?? existing.classification
+                if chatItems != updated.chatItems || classification != updated.classification {
                     updated = SessionStateLight(
                         sessionId: updated.sessionId,
                         projectName: updated.projectName,
@@ -53,7 +56,8 @@ class iOSSessionStore: ObservableObject {
                         displayTitle: updated.displayTitle,
                         pendingToolName: updated.pendingToolName,
                         pendingToolInput: updated.pendingToolInput,
-                        chatItems: sessions[index].chatItems
+                        chatItems: chatItems,
+                        classification: classification
                     )
                 }
                 sessions[index] = updated
@@ -129,7 +133,8 @@ class iOSSessionStore: ObservableObject {
             displayTitle: session.displayTitle,
             pendingToolName: nil,  // Clear pending tool when phase changes
             pendingToolInput: nil,
-            chatItems: session.chatItems  // Preserve existing chat history
+            chatItems: session.chatItems,  // Preserve existing chat history
+            classification: session.classification  // Preserve classification
         )
         sessions[index] = updatedSession
         logger.info("Updated session \(sessionId.prefix(8)) phase to \(newPhase)")
